@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Screening - DSFP Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Page-specific styles */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #076196;
+            box-shadow: 0 0 0 2px rgba(7,97,150,0.1);
+        }
+        
+        .btn {
+            background: #076196;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #054d73;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .results {
+            display: none;
+            margin-top: 2rem;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .result-item {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .result-header {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        
+        .result-top-section {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .sample-info {
+            flex: 1;
+        }
+        
+        .semiquant-info {
+            min-width: 250px;
+            padding: 0.75rem;
+            background: #e8f5e8;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        
+        .semiquant-title {
+            font-weight: 600;
+            color: #28a745;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .semiquant-details {
+            font-size: 0.85rem;
+        }
+        
+        .score-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .score-item {
+            text-align: center;
+            padding: 0.5rem;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .score-label {
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .score-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #076196;
+        }
+        
+        .ip-score-container {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin: 0.75rem 0;
+            text-align: center;
+            border: 2px solid #28a745;
+            border-left: 4px solid #28a745;
+        }
+        
+        .ip-score-label {
+            color: #28a745;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+        }
+        
+        .ip-score-value {
+            color: #28a745;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        
+        .ip-score-description {
+            color: #6c757d;
+            font-size: 0.7rem;
+            margin-top: 0.25rem;
+            font-style: italic;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .health-status {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .health-healthy {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+        
+        .health-error {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+    </style>
+    <script>
+        fetch('header.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('shared-header').innerHTML = html;
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            });
+    </script>
+</head>
+<body>
+    
+    <div id="shared-header"></div>
+    
+    <div class="container">
+        
+        <!-- Screening Form Card -->
+        <div class="card">
+            <div class="section-header">
+                <h2><i data-lucide="target" class="icon-md"></i> Screen Individual Sample</h2>
+            </div>
+            <div class="section-content">
+                <form id="screeningForm" onsubmit="screenSample(event)">
+                    <div class="form-group">
+                        <label for="sampleId">Sample ID:</label>
+                        <input type="number" id="sampleId" name="sampleId" required 
+                               placeholder="Enter sample ID (e.g., 123)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="substances">Substances (one per line):</label>
+                        <textarea id="substances" name="substances" rows="4" required 
+                                  placeholder="Caffeine&#10;Atrazine&#10;Diclofenac"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="mzTolerance">m/z Tolerance:</label>
+                        <input type="number" id="mzTolerance" name="mzTolerance" 
+                               value="0.005" step="0.001" min="0.001" max="1.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="rtiTolerance">RTI Tolerance (%):</label>
+                        <input type="number" id="rtiTolerance" name="rtiTolerance" 
+                               value="20.0" step="1.0" min="1.0" max="100.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="collectionId">Collection:</label>
+                        <input type="text" id="collectionId" name="collectionId" 
+                               placeholder="Leave empty to use sample's collection">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="index">Index:</label>
+                        <input type="text" id="index" name="index" 
+                               value="dsfp-screening-index" disabled>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="filterByBlanks" name="filterByBlanks" checked>
+                            Filter by blanks
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <i data-lucide="play" class="icon-sm"></i> Start Screening
+                    </button>
+                </form>
+                
+                <div id="loading" class="loading">
+                    <p><i data-lucide="loader" class="icon-md"></i> Screening in progress...</p>
+                    <p>This may take several minutes depending on the number of substances.</p>
+                </div>
+                
+                <div id="results" class="results">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        
+        async function screenSample(event) {
+            event.preventDefault();
+            
+            const form = document.getElementById('screeningForm');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Get form data
+            const formData = new FormData(form);
+            const substances = formData.get('substances').split('\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+            
+            const requestData = {
+                sample_id: parseInt(formData.get('sampleId')),
+                substances: substances,
+                mz_tolerance: parseFloat(formData.get('mzTolerance')),
+                rti_tolerance: parseFloat(formData.get('rtiTolerance')),
+                filter_by_blanks: formData.get('filterByBlanks') === 'on',
+                collection_id: formData.get('collectionId') || null,
+                index: formData.get('index')
+            };
+            
+            // Show loading state
+            loading.classList.add('show');
+            results.classList.remove('show');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Screening...';
+            lucide.createIcons();
+            
+            try {
+                const response = await fetch('/api/screen-sample', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    displayError(data.error || 'Unknown error occurred');
+                }
+                
+            } catch (error) {
+                displayError(`Request failed: ${error.message}`);
+            } finally {
+                // Hide loading state
+                loading.classList.remove('show');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i data-lucide="play" class="icon-sm"></i> Start Screening';
+                lucide.createIcons();
+            }
+        }
+        
+        function displayResults(data) {
+            const results = document.getElementById('results');
+            const screeningData = data.screening_results;
+            
+            let html = `
+                <div class="success">
+                    <strong>Screening completed successfully!</strong><br>
+                    Sample ID: ${data.sample_id}<br>
+                    Results found: ${screeningData.results.length}<br>
+                    Substances processed: ${screeningData.substance_count}
+                </div>
+            `;
+            
+            if (screeningData.results.length > 0) {
+                html += '<h3>Screening Results:</h3>';
+                
+                screeningData.results.forEach((result, index) => {
+                    html += `
+                        <div class="result-item">
+                            <div class="result-header">
+                                Detection ${index + 1}: ${result.substance_id}
+                            </div>
+                            
+                            <div class="result-top-section">
+                                <div class="sample-info">
+                                    <p><strong>Sample:</strong> ${result.short_name || 'N/A'}</p>
+                                    <p><strong>Type:</strong> ${result.sample_type || 'N/A'}</p>
+                                    <p><strong>Collection:</strong> ${result.collection_id || 'N/A'}</p>
+                                </div>
+                                
+                                ${result.semiquantification ? `
+                                    <div class="semiquant-info">
+                                        <div class="semiquant-title">
+                                            Semiquantification Results
+                                        </div>
+                                        <div class="semiquant-details">
+                                            <strong>Method:</strong> ${result.semiquantification.method || 'N/A'}<br>
+                                            <strong>Concentration:</strong> ${result.semiquantification.concentration || 'N/A'}
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div class="semiquant-info" style="background: #f8f8f8; border-left-color: #6c757d;">
+                                        <div class="semiquant-title" style="color: #6c757d;">
+                                            Semiquantification
+                                        </div>
+                                        <div class="semiquant-details" style="color: #6c757d;">
+                                            <em>Not available for this detection</em>
+                                        </div>
+                                    </div>
+                                `}
+                            </div>
+                            
+                            <div class="ip-score-container">
+                                <div class="ip-score-label">IP Score</div>
+                                <div class="ip-score-value">${result.scores.ip_score ? (result.scores.ip_score * 100).toFixed(1) + '%' : 'N/A'}</div>
+                                <div class="ip-score-description">Calculated from all individual scores below</div>
+                            </div>
+                            
+                            <div class="score-grid">
+                                <div class="score-item">
+                                    <div class="score-label">RTI Score</div>
+                                    <div class="score-value">${result.scores.rti || 'N/A'}</div>
+                                </div>
+                                <div class="score-item">
+                                    <div class="score-label">m/z Score</div>
+                                    <div class="score-value">${result.scores.mz || 'N/A'}</div>
+                                </div>
+                                <div class="score-item">
+                                    <div class="score-label">Fragment Score</div>
+                                    <div class="score-value">${result.scores.fragments || 'N/A'}</div>
+                                </div>
+                                <div class="score-item">
+                                    <div class="score-label">Spectral Similarity</div>
+                                    <div class="score-value">${result.scores.spectral_similarity || 'N/A'}</div>
+                                </div>
+                                <div class="score-item">
+                                    <div class="score-label">Isotopic Fit</div>
+                                    <div class="score-value">${result.scores.isotopic_fit || 'N/A'}</div>
+                                </div>
+                                <div class="score-item">
+                                    <div class="score-label">Formula Fit</div>
+                                    <div class="score-value">${result.scores.molecular_formula_fit || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<p>No screening results found for the specified substances.</p>';
+            }
+            
+            results.innerHTML = html;
+            results.classList.add('show');
+        }
+        
+        function displayError(errorMessage) {
+            const results = document.getElementById('results');
+            results.innerHTML = `
+                <div class="error">
+                    <strong>Screening failed:</strong><br>
+                    ${errorMessage}
+                </div>
+            `;
+            results.classList.add('show');
+        }
+    </script>
+</body>
+</html>

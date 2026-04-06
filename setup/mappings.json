@@ -1,0 +1,690 @@
+{
+    "settings": {
+        "index": {
+            "mapping": {
+                "nested_objects": {
+                    "limit": 50000
+                }
+            }
+        }
+    },
+    "mappings": {
+        "properties": {
+            "analysis_date": {
+                "type": "date",
+                "ignore_malformed": true
+            },
+            "analysis_time": {
+                "type": "keyword"
+            },
+            "cas": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "chemical_properties": {
+                "properties": {
+                    "exp_logkow_epi_suite": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "logkow_epi_suite": {
+                        "type": "float"
+                    }
+                }
+            },
+            "collection_id": {
+                "type": "long"
+            },
+            "collection_title": {
+                "type": "keyword"
+            },
+            "collection_uid": {
+                "type": "keyword"
+            },
+            "data_independent": {
+                "type": "nested",
+                "properties": {
+                    "file": {
+                        "type": "keyword"
+                    },
+                    "int": {
+                        "type": "keyword"
+                    },
+                    "mz": {
+                        "type": "keyword"
+                    },
+                    "rt": {
+                        "type": "keyword"
+                    }
+                }
+            },
+            "detection_id": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "ecotoxicity": {
+                "properties": {
+                    "algae_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "daphnia_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "ec50_72_hr_ug_per_L": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "igc50_48_hr_ug_per_L": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "lc50_48_hr_ug_per_L": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "lc50_96_hr_ug_per_L": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "pimephales_promelas_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "tetrahmena_pyriformis_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "uncertainty_algae_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "uncertainty_daphnia_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "uncertainty_pimephales_promelas_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "uncertainty_tetrahmena_pyriformis_toxicity": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    }
+                }
+            },
+            "ext_databases": {
+                "properties": {
+                    "chemspider_id": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "pubchem_cid": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    }
+                }
+            },
+            "fullscan": {
+                "type": "nested",
+                "properties": {
+                    "adducts_int": {
+                        "type": "float"
+                    },
+                    "adducts_mz": {
+                        "type": "float"
+                    },
+                    "adducts_rt": {
+                        "type": "float"
+                    },
+                    "cas": {
+                        "type": "keyword"
+                    },
+                    "concentration_units": {
+                        "type": "keyword"
+                    },
+                    "estimated_concentration": {
+                        "type": "keyword"
+                    },
+                    "estimated_concentration_method": {
+                        "type": "keyword"
+                    },
+                    "gc_retention_time_index": {
+                        "type": "keyword"
+                    },
+                    "hrmsms_int": {
+                        "type": "float"
+                    },
+                    "hrmsms_mz": {
+                        "type": "float"
+                    },
+                    "identification_confidence": {
+                        "type": "keyword"
+                    },
+                    "ion_type": {
+                        "type": "keyword"
+                    },
+                    "isotopes_int": {
+                        "type": "float"
+                    },
+                    "isotopes_mz": {
+                        "type": "float"
+                    },
+                    "isotopes_rt": {
+                        "type": "float"
+                    },
+                    "lc_retention_index": {
+                        "type": "float"
+                    },
+                    "max_intensity": {
+                        "type": "long"
+                    },
+                    "molecular_formula": {
+                        "type": "keyword"
+                    },
+                    "ms_ms_available": {
+                        "type": "keyword"
+                    },
+                    "mz": {
+                        "type": "float"
+                    },
+                    "norman_id": {
+                        "type": "keyword"
+                    },
+                    "peak_area": {
+                        "type": "long"
+                    },
+                    "proposed_identification_name": {
+                        "type": "keyword"
+                    },
+                    "rt_minutes": {
+                        "type": "float"
+                    },
+                    "semiquantification_based_on_compound": {
+                        "type": "keyword"
+                    },
+                    "smiles": {
+                        "type": "keyword"
+                    },
+                    "structural_similarity_for_semiquantification": {
+                        "type": "keyword"
+                    }
+                }
+            },
+            "instrument_setup_used": {
+                "properties": {
+                    "accuracy_full_scan_ms": {
+                        "type": "long"
+                    },
+                    "accuracy_ms_ms": {
+                        "type": "long"
+                    },
+                    "column_manufacturer": {
+                        "type": "keyword"
+                    },
+                    "column_model": {
+                        "type": "keyword"
+                    },
+                    "electronic_noise_cutoff": {
+                        "type": "long"
+                    },
+                    "expression_of_mass_accuracy": {
+                        "type": "keyword"
+                    },
+                    "instrument": {
+                        "type": "long"
+                    },
+                    "instrument_id": {
+                        "type": "keyword"
+                    },
+                    "instrument_manufacturer": {
+                        "type": "keyword"
+                    },
+                    "instrument_model": {
+                        "type": "keyword"
+                    },
+                    "instrument_title": {
+                        "type": "keyword"
+                    },
+                    "instrument_type": {
+                        "type": "keyword"
+                    },
+                    "ionization_type": {
+                        "type": "keyword"
+                    },
+                    "lab": {
+                        "type": "keyword"
+                    },
+                    "minimum_intensity": {
+                        "type": "long"
+                    },
+                    "minimum_number_of_scans": {
+                        "type": "long"
+                    },
+                    "organisation": {
+                        "type": "keyword"
+                    },
+                    "organisation_abbreviation": {
+                        "type": "keyword"
+                    },
+                    "peakwidth_max": {
+                        "type": "long"
+                    },
+                    "peakwidth_min": {
+                        "type": "long"
+                    },
+                    "ppm_tolerance": {
+                        "type": "float"
+                    },
+                    "reconsitution_solvent": {
+                        "type": "keyword"
+                    },
+                    "setup_alias": {
+                        "type": "keyword"
+                    },
+                    "setup_id": {
+                        "type": "long"
+                    },
+                    "short_description": {
+                        "type": "keyword"
+                    }
+                }
+            },
+            "latitude": {
+                "type": "float"
+            },
+            "longitude": {
+                "type": "float"
+            },
+            "matches": {
+                "properties": {
+                    "lc_retention_index": {
+                        "type": "float"
+                    },
+                    "mz": {
+                        "type": "float"
+                    },
+                    "peak_area": {
+                        "type": "float"
+                    },
+                    "rt_minutes": {
+                        "type": "float"
+                    }
+                }
+            },
+            "matrix_type": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "matrix_type2": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "mol_formula": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "monitored_city": {
+                "type": "keyword"
+            },
+            "monitored_country": {
+                "type": "keyword"
+            },
+            "ms_information": {
+                "properties": {
+                    "ionization": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "pred_cmfid_adduct": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "pred_cmfid_fragments": {
+                        "type": "float"
+                    },
+                    "pred_cmfid_fragments_intensity": {
+                        "type": "float"
+                    },
+                    "pred_cmfid_ion_type_and_collision_energy": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "pred_mz_adduct": {
+                        "type": "float"
+                    }
+                }
+            },
+            "name": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "norman_id": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "preferable_ionization": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "rti": {
+                "properties": {
+                    "pred_rti_negative_esi": {
+                        "type": "float"
+                    },
+                    "pred_rti_positive_esi": {
+                        "type": "float"
+                    },
+                    "uncertainty_rti_neg": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "uncertainty_rti_pos": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    }
+                }
+            },
+            "sample_id": {
+                "type": "long"
+            },
+            "sample_type": {
+                "type": "keyword"
+            },
+            "sampling_date": {
+                "type": "date",
+                "ignore_malformed": true
+            },
+            "sampling_time": {
+                "type": "keyword"
+            },
+            "scores": {
+                "properties": {
+                    "fragments": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "isotopic_fit": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "mz": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "rti": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    }
+                }
+            },
+            "short_name": {
+                "type": "keyword"
+            },
+            "sle_lists": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "structure": {
+                "properties": {
+                    "ms_Ready_stdinchi": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "ms_ready_smiles": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "ms_ready_stdinchikey": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "optimized_inchi": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "optimized_smiles": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "smiles": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "std_inchi": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    },
+                    "std_inchikey": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            }
+                        }
+                    }
+                }
+            },
+            "substance_id": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            },
+            "validation_level": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 256
+                    }
+                }
+            }
+        }
+    }
+}

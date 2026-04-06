@@ -1,0 +1,43 @@
+<style>
+    
+        
+        .nav {
+            background: #094d77;
+            padding: 0.5rem 2rem;
+        }
+        
+        .nav a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            margin-right: 1rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .nav a:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav a.active {
+            background: #3498db;
+        }
+</style>
+
+<div class="header">
+    <h1>DSFP in a box</h1>
+    <div class="subtitle">Digital Sample Freezing Platform</div>
+    <div class="dsfp-jump"><a href="https://dsfp.norman-data.eu/" target="_blank"><img src="./DSFP.png"/></a></div>
+</div>
+<div class="nav">
+    <a href="/"><i data-lucide="home" class="icon-sm"></i> Dashboard</a>
+    <a href="/data-loader.html"><i data-lucide="folder" class="icon-sm"></i> Data Storage</a>
+    <a href="/screening.html"><i data-lucide="search" class="icon-sm"></i> Screening</a>
+    <a href="/detections.html"><i data-lucide="map" class="icon-sm"></i> Results</a>
+</div>
+<script>
+    // Create icons after header is loaded
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+</script>

@@ -1,0 +1,502 @@
+/* Import Rubik font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
+
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Rubik', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f5f7fa;
+    color: #333;
+    line-height: 1.6;
+}
+
+/* Header Styles */
+.header {
+    background: #076196;
+    color: white;
+    padding: 1rem 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header h1 {
+    font-size: 1.8rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.header .subtitle {
+    opacity: 0.8;
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+/* Navigation Styles */
+.nav {
+    background: #094d77;
+    padding: 0.5rem 2rem;
+}
+
+.nav a {
+    color: white;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    margin-right: 1rem;
+    border-radius: 4px;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nav a:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nav a.active {
+    background: #3498db;
+}
+
+/* Container */
+.container {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 2rem;
+}
+
+/* Card Styles */
+.card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+
+.section-header {
+    background: #076196;
+    color: white;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.section-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+}
+
+.section-content {
+    padding: 2rem;
+}
+
+/* Button Styles */
+.btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-family: 'Rubik', sans-serif;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn:hover {
+    background: #2980b9;
+}
+
+.btn.btn-default {
+    font-size: 0.7rem;
+}
+
+.btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn-success {
+    background: #27ae60;
+}
+
+.btn-success:hover {
+    background: #229954;
+}
+
+.btn-danger {
+    background: #e74c3c;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
+}
+
+/* Info Grid */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.info-card {
+    text-align: center;
+    padding: 1.5rem 1rem;
+    border: 1px solid #ecf0f1;
+    border-radius: 4px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.info-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.info-number {
+    font-size: 2rem;
+    font-weight: 600;
+    color: #3498db;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.info-label {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* Message Styles */
+.message {
+    padding: 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.message h4 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.error-message {
+    background-color: #fadbd8;
+    border-left: 4px solid #e74c3c;
+    color: #c0392b;
+}
+
+.success-message {
+    background-color: #d5f4e6;
+    border-left: 4px solid #27ae60;
+    color: #229954;
+}
+
+.info-message {
+    background-color: #e3f2fd;
+    border-left: 4px solid #3498db;
+    color: #2c3e50;
+}
+
+.warning-message {
+    background-color: #fff3cd;
+    border-left: 4px solid #f39c12;
+    color: #856404;
+}
+
+/* Progress Bar */
+.progress-container {
+    margin: 1rem 0;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 12px;
+    background-color: #ecf0f1;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 6px;
+}
+
+.progress-text {
+    text-align: center;
+    font-size: 0.9rem;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* Upload Area */
+.upload-area {
+    border: 3px dashed #bdc3c7;
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+    margin: 1rem 0;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: #3498db;
+    background: #e3f2fd;
+    transform: translateY(-2px);
+}
+
+.upload-icon {
+    font-size: 3rem;
+    color: #7f8c8d;
+    margin-bottom: 1rem;
+}
+
+.upload-area.dragover .upload-icon {
+    color: #3498db;
+}
+
+.upload-text {
+    font-size: 1.1rem;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.upload-subtext {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+/* Table Styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+th, td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+tr:hover {
+    background: #f8f9fa;
+}
+
+/* Info Box Styles */
+.info-box {
+    margin-top: 1rem;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid #3498db;
+}
+
+.info-box h3, .info-box h4 {
+    color: #2c3e50;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-box p {
+    color: #2c3e50;
+    margin-bottom: 0.75rem;
+    line-height: 1.6;
+}
+
+.info-box ul, .info-box ol {
+    margin-left: 1.5rem;
+    color: #2c3e50;
+}
+
+.info-box li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.info-box li:last-child {
+    border-bottom: none;
+}
+
+.info-box strong {
+    color: #3498db;
+    font-weight: 500;
+}
+
+.info-box code {
+    background: #2c3e50;
+    color: #2ecc71;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+}
+
+/* Path Box */
+.path-box {
+    display: flex;
+    align-items: center;
+    background: #2c3e50;
+    padding: 0.8rem;
+    border-radius: 4px;
+    margin: 0.5rem 0;
+}
+
+.path-box code {
+    background: transparent;
+    color: #2ecc71;
+    font-family: 'Courier New', monospace;
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+.copy-btn {
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 0.3rem 0.6rem;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    font-family: 'Rubik', sans-serif;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.copy-btn:hover {
+    background: #229954;
+}
+
+/* Animation */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.uploading .upload-icon {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Icon Sizing */
+.icon-sm {
+    width: 16px;
+    height: 16px;
+}
+
+.icon-md {
+    width: 20px;
+    height: 20px;
+}
+
+.icon-lg {
+    width: 24px;
+    height: 24px;
+}
+
+.icon-xl {
+    width: 32px;
+    height: 32px;
+}
+
+/* Utility Classes */
+.text-center {
+    text-align: center;
+}
+
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }
+
+.gap-sm { gap: 0.5rem; }
+.gap-md { gap: 1rem; }
+.gap-lg { gap: 1.5rem; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 0 1rem;
+    }
+    
+    .header {
+        padding: 1rem;
+    }
+    
+    .nav {
+        padding: 0.5rem 1rem;
+    }
+    
+    .section-content {
+        padding: 1rem;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.lucide-pause {
+  width: 14px;
+  height: 14px;
+}
+
+#sampleFilter {
+  height: 33px;
+  padding: 5px;
+}
+
+.dsfp-jump {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  padding: 30px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 60%;
+  filter: drop-shadow(30px 10px 4px #2980b9);
+}
+
+.dsfp-jump img {
+    color: #fff;
+    width:80px;
+}

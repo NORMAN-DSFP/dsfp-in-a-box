@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screening - DSFP Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Page-specific styles only */
+        .screening-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .file-table th,
+        .file-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .file-table th {
+            background: #f8f9fa;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .file-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-screened {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .status-unprocessed {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .status-processing {
+            background: #fff3cd;
+            color: #f39c12;
+        }
+
+        .status-unknown {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .file-icon {
+            margin-right: 0.5rem;
+        }
+
+        .file-size {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .file-date {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        .action-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+            margin-right: 0.5rem;
+        }
+
+        .action-btn:hover {
+            background: #2980b9;
+        }
+
+        .action-btn.danger {
+            background: #e74c3c;
+        }
+
+        .action-btn.danger:hover {
+            background: #c0392b;
+        }
+
+        .action-btn.success {
+            background: #27ae60;
+        }
+
+        .action-btn.success:hover {
+            background: #229954;
+        }
+
+        .refresh-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
+
+        .sample-screening-link {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-decoration: none;
+            display: inline-block;
+            margin-left: 0.5rem;
+        }
+
+        .sample-screening-link:hover {
+            background: #229954;
+        }
+
+        .clear-db-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-left: 0.5rem;
+        }
+
+        .clear-db-btn:hover {
+            background: #c0392b;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-number.screened {
+            color: #27ae60;
+        }
+
+        .stat-number.unprocessed {
+            color: #e74c3c;
+        }
+
+        .stat-number.total {
+            color: #3498db;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #7f8c8d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #7f8c8d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .search-box {
+            margin-bottom: 1rem;
+            padding: 0.8rem;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-select {
+            padding: 0.5rem;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Progress bar styles */
+        .screening-progress-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 16px;
+            background-color: #ecf0f1;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            min-width: 100px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db 0%, #2ecc71 100%);
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-bar-fill.complete {
+            background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%);
+        }
+
+        .progress-text {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+            z-index: 2;
+        }
+
+        .play-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .play-btn:hover {
+            background: #229954;
+            transform: scale(1.05);
+        }
+
+        .play-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .jump-link {
+            background: #eee;
+            color: #495057;
+            border: none;
+            border-radius: 4px;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            font-size: 12px;
+            flex-shrink: 0;
+            text-decoration: none;
+            margin-left: 0.25rem;
+            border: 1px solid #dbdbdb;
+        }
+
+        .jump-link:hover {
+            background: #eee;
+            transform: scale(1.05);
+        }
+
+        .screening-status {
+            font-size: 0.8em;
+            color: #7f8c8d;
+            margin-top: 0.25rem;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+
+        .info-box p {
+            margin: 0;
+            color: #1565c0;
+        }
+
+        .screening-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .indexed {
+            color: #2196f3;
+        }
+
+        .screening-index-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .screening-index-table th,
+        .screening-index-table td {
+            padding: 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .screening-index-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .screening-index-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .file-badge {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .doc-count {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .file-table {
+                font-size: 0.9rem;
+            }
+            
+            .file-table th,
+            .file-table td {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+    <script>
+        fetch('header.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('shared-header').innerHTML = html;
+                lucide.createIcons();
+            });
+    </script>
+</head>
+<body>
+    
+    <div id="shared-header"></div>
+
+    <div class="container">
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number total" id="totalFiles">-</div>
+                <div class="stat-label">Total Samples</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number screened" id="screenedFiles">-</div>
+                <div class="stat-label">Screened Samples</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number unprocessed" id="unprocessedFiles">-</div>
+                <div class="stat-label">Unscreened Samples</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="completionRate" style="color: #f39c12;">-</div>
+                <div class="stat-label">Screening Rate</div>
+            </div>
+        </div>
+
+        <!-- Screening Index Status -->
+        <div class="card screening-section">
+            <div class="section-header">
+                <h2><i data-lucide="bar-chart-3" class="icon-md"></i> All Tracked Samples</h2>
+                <div>
+                    <button class="btn btn-success" onclick="loadScreeningIndexFiles()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
+                    <a href="sample-screening.html" class="btn btn-default" style="text-decoration: none;"><i data-lucide="target" class="icon-sm"></i> Screen individual sample</a>
+                    <button class="btn btn-danger" onclick="clearScreeningDatabase()"><i data-lucide="trash-2" class="icon-sm"></i> Delete samples</button>
+                </div>
+            </div>
+            
+            <div class="section-content">
+                
+                <div id="screeningIndexContainer">
+                    <div class="loading">
+                        <i data-lucide="loader" class="icon-md"></i> Loading sample tracking data...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let screeningData = [];
+
+        // Load screening index files
+        async function loadScreeningIndexFiles() {
+            try {
+                document.getElementById('screeningIndexContainer').innerHTML = '<div class="loading"><i data-lucide="loader" class="icon-md"></i> Loading sample tracking data...</div>';
+                lucide.createIcons();
+                
+                const success = await loadScreeningData();
+                if (success) {
+                    updateScreeningIndexStats();
+                    renderScreeningIndexFiles();
+                } else {
+                    throw new Error('Failed to load screening data');
+                }
+            } catch (error) {
+                console.error('Error loading screening data:', error);
+                document.getElementById('screeningIndexContainer').innerHTML = `
+                    <div class="empty-state">
+                        <h3>Error Loading Sample Tracking Data</h3>
+                        <p>${error.message}</p>
+                        <button class="action-btn" onclick="loadScreeningIndexFiles()"><i data-lucide="refresh-cw" class="icon-sm"></i> Try Again</button>
+                    </div>
+                `;
+                lucide.createIcons();
+            }
+        }
+
+        // Update screening index statistics - removed since stats section was removed
+        function updateScreeningIndexStats() {
+            // No longer needed since screeningIndexStats section was removed
+        }
+
+        // Render screening index files table
+        function renderScreeningIndexFiles() {
+            const container = document.getElementById('screeningIndexContainer');
+            
+            if (screeningData.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No sample tracking data found</h3>
+                        <p>No data has been loaded from the indices yet.</p>
+                        <button class="action-btn" onclick="initializeTrackingData(event)"><i data-lucide="refresh-cw" class="icon-sm"></i> Initialize from Elasticsearch</button>
+                        <button class="action-btn" onclick="loadScreeningIndexFiles()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            // Format and render the table
+            const tableHTML = `
+                <table class="screening-index-table">
+                    <thead>
+                        <tr>
+                            <th>Sample ID</th>
+                            <th>Short Name</th>
+                            <th>Last Screened</th>
+                            <th>Screening status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${screeningData.map(sample => {
+                            // Debug: Log sample data to see what we're receiving
+                            // console.log('Sample data:', sample);
+                            
+                            // Format the last screened date
+                            let lastScreenedDisplay = 'Never';
+                            if (sample.last_screened) {
+                                try {
+                                    const date = new Date(sample.last_screened);
+                                    lastScreenedDisplay = date.toLocaleString();
+                                } catch (e) {
+                                    lastScreenedDisplay = 'Invalid Date';
+                                }
+                            }
+                            
+                            // Calculate remaining substances to be screened
+                            // Use known compounds count from Elasticsearch as fallback
+                            const totalSubstances = sample.total_substances || 95139; // Known count from compounds index
+                            const substancesScreened = sample.substances_screened || 0;
+                            const substancesDetected = sample.substances_detected || 0;
+                            const remainingSubstances = Math.max(0, totalSubstances - substancesScreened);
+                            
+                            // Calculate progress percentage
+                            const progressPercentage = totalSubstances > 0 ? 
+                                Math.round((substancesScreened / totalSubstances) * 100) : 0;
+                            const isComplete = progressPercentage >= 100;
+                            
+                            return `
+                                <tr>
+                                    <td>${sample.sample_id}</td>
+                                    <td>${sample.short_name || 'Unknown'}</td>
+                                    <td>
+                                        ${lastScreenedDisplay}
+                                    </td>
+                                    <td>
+                                        <div class="screening-progress-container">
+                                            <div class="progress-bar">
+                                                <div class="progress-bar-fill ${isComplete ? 'complete' : ''}" 
+                                                     style="width: ${progressPercentage}%"></div>
+                                                <div class="progress-text">${substancesScreened}/${totalSubstances}</div>
+                                            </div>
+                                            <button class="play-btn" 
+                                                    onclick="resumeScreening('${sample.sample_id}')"
+                                                    ${isComplete ? 'disabled' : ''}
+                                                    title="${isComplete ? 'Screening Complete' : 'Resume Screening'}">
+                                                <i data-lucide="${isComplete ? 'check' : 'play'}" class="icon-sm"></i>
+                                            </button>
+                                            <a target="_blank" href="detections.html?sample_id=${sample.sample_id}" 
+                                               class="jump-link" 
+                                               title="View detections for this sample">
+                                                <i data-lucide="search" class="icon-sm"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
+            lucide.createIcons();
+        }
+
+        // Load screening data from Elasticsearch (merging tracking and screening indices)
+        async function loadScreeningData() {
+            try {
+                const response = await fetch('/api/tracking/files');
+                const data = await response.json();
+                
+                if (data.success) {
+                    screeningData = data.files || [];
+                    return true;
+                } else {
+                    console.error('Error loading sample tracking data:', data.error);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error loading sample tracking data:', error);
+                return false;
+            }
+        }
+
+        // Get file status from screening data
+        function getFileStatus(filename) {
+            if (!filename) return 'unprocessed';
+            const record = screeningData.find(item => item.filename === filename);
+            return record ? record.status : 'unprocessed';
+        }
+
+        // Update file status in Elasticsearch
+        async function setFileStatus(filename, status) {
+            try {
+                const response = await fetch('/api/screening/update-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filename, status })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Update local data
+                    const record = screeningData.find(item => item.filename === filename);
+                    if (record) {
+                        record.status = status;
+                        record.last_processed = new Date().toISOString();
+                    }
+                    updateStats();
+                    renderFiles();
+                } else {
+                    console.error('Error updating status:', result.error);
+                    alert('Failed to update status: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+                alert('Failed to update status: ' + error.message);
+            }
+        }
+
+        // Format file size
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Get file icon - removed since we're not showing filenames anymore
+
+        // Initialize tracking data from Elasticsearch
+        async function initializeTrackingData(event) {
+            try {
+                const button = event ? event.target : document.querySelector('button[onclick*="initializeTrackingData"]');
+                if (button) {
+                    button.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Initializing...';
+                    button.disabled = true;
+                    lucide.createIcons();
+                }
+                
+                const response = await fetch('/api/tracking/initialize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`Success: ${result.message}`);
+                    // Reload the data
+                    await loadScreeningIndexFiles();
+                } else {
+                    alert(`Error: ${result.message || result.error}`);
+                }
+            } catch (error) {
+                console.error('Error initializing tracking data:', error);
+                alert('Failed to initialize tracking data: ' + error.message);
+            } finally {
+                // Re-enable button
+                const button = event ? event.target : document.querySelector('button[onclick*="initializeTrackingData"]');
+                if (button) {
+                    button.innerHTML = '<i data-lucide="refresh-cw" class="icon-sm"></i> Initialize from Elasticsearch';
+                    button.disabled = false;
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        // Track active screening sessions
+        const activeScreeningSessions = new Map();
+
+        // Disable/enable all play buttons
+        function setAllPlayButtonsState(disabled) {
+            const allButtons = document.querySelectorAll('.play-btn');
+            allButtons.forEach(button => {
+                if (disabled) {
+                    button.disabled = true;
+                    button.style.opacity = '0.5';
+                } else {
+                    // Only enable if not already disabled (completed)
+                    const icon = button.querySelector('svg');
+                    if (icon && !icon.hasAttribute('lucide-check')) {
+                        button.disabled = false;
+                        button.style.opacity = '1';
+                    }
+                }
+            });
+        }
+
+        // Enable specific button during screening
+        function enableSpecificButton(sampleId) {
+            const button = document.querySelector(`button[onclick*="'${sampleId}'"]`);
+            if (button) {
+                button.disabled = false;
+                button.style.opacity = '1';
+            }
+        }
+
+        // Resume screening for a specific sample - screens on the spot
+        async function resumeScreening(sampleId) {
+            try {
+                // Check if already screening
+                if (activeScreeningSessions.has(sampleId)) {
+                    // Pause the screening
+                    pauseScreening(sampleId);
+                    return;
+                }
+
+                // Update button to loading state (don't disable other buttons)
+                const loadingButton = document.querySelector(`button[onclick*="'${sampleId}'"]`);
+                if (loadingButton) {
+                    loadingButton.innerHTML = '<i data-lucide="loader" class="icon-sm"></i>';
+                    loadingButton.title = 'Loading compounds...';
+                    loadingButton.disabled = true;
+                    lucide.createIcons();
+                }
+
+                // Get the sample data
+                const sample = screeningData.find(s => s.sample_id === sampleId);
+                if (!sample) {
+                    alert('Sample not found');
+                    if (loadingButton) {
+                        updatePlayButton(sampleId, 'play');
+                    }
+                    return;
+                }
+
+                // Get all substances from compounds index via backend API
+                const compoundsResponse = await fetch('/api/compounds/all');
+                
+                if (!compoundsResponse.ok) {
+                    throw new Error('Failed to fetch compounds list');
+                }
+
+                const compoundsData = await compoundsResponse.json();
+                
+                if (!compoundsData.success) {
+                    throw new Error(compoundsData.error || 'Failed to fetch compounds');
+                }
+                
+                const allSubstances = compoundsData.substances;
+                
+                // Get already screened substances for this sample
+                const screenedResponse = await fetch('/api/tracking/screened-substances', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sample_id: sampleId })
+                });
+
+                let screenedSubstances = [];
+                if (screenedResponse.ok) {
+                    const screenedData = await screenedResponse.json();
+                    screenedSubstances = screenedData.substances || [];
+                }
+
+                // Create subset of unscreened substances
+                const unscreenedSubstances = allSubstances.filter(
+                    substance => !screenedSubstances.includes(substance)
+                );
+
+                if (unscreenedSubstances.length === 0) {
+                    alert('All substances have already been screened for this sample');
+                    updatePlayButton(sampleId, 'complete');
+                    return;
+                }
+
+                // Create screening session
+                const session = {
+                    sampleId,
+                    substances: unscreenedSubstances,
+                    currentIndex: 0,
+                    isPaused: false,
+                    isComplete: false,
+                    totalSubstances: allSubstances.length,
+                    initialScreened: screenedSubstances.length
+                };
+                activeScreeningSessions.set(sampleId, session);
+
+                // Update button to pause symbol and disable all other buttons
+                updatePlayButton(sampleId, 'pause');
+                setAllPlayButtonsState(true);
+                enableSpecificButton(sampleId);
+
+                // Start screening
+                await screenSubstances(session);
+
+            } catch (error) {
+                console.error('Error starting screening:', error);
+                alert('Failed to start screening: ' + error.message);
+                activeScreeningSessions.delete(sampleId);
+                setAllPlayButtonsState(false);
+                updatePlayButton(sampleId, 'play');
+            }
+        }
+
+        // Screen substances for a sample
+        async function screenSubstances(session) {
+            const { sampleId, substances } = session;
+
+            try {
+                while (session.currentIndex < substances.length && !session.isPaused) {
+                    const substance = substances[session.currentIndex];
+                    
+                    // Call screening service
+                    const screeningResponse = await fetch('/api/screen-sample', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sample_id: sampleId,
+                            substances: [substance],
+                            mz_tolerance: 0.005,
+                            rti_tolerance: 20.0,
+                            filter_by_blanks: true
+                        })
+                    });
+
+                    if (!screeningResponse.ok) {
+                        console.error(`Failed to screen substance ${substance}`);
+                    } else {
+                        // Wait for the response to complete before incrementing
+                        const screeningResult = await screeningResponse.json();
+
+                        // Check if the substance was successfully loaded from Elasticsearch
+                        // success === false means the substance couldn't be loaded (Elasticsearch query error)
+                        // success === true means it was loaded and processed (even if no detections found)
+                        if (screeningResult.success !== false) {
+                            // Now increment the counter after screening is complete
+                            session.currentIndex++;
+
+                            // Update progress bar
+                            const substancesScreened = session.initialScreened + session.currentIndex;
+                            const progressPercentage = Math.round((substancesScreened / session.totalSubstances) * 100);
+                            updateProgressBar(sampleId, substancesScreened, session.totalSubstances, progressPercentage);
+                        } else {
+                            console.warn(`Substance ${substance} failed to load from Elasticsearch (${screeningResult.message}). Skipping...`);
+                            // Still move to next substance, but don't count it as screened
+                            session.currentIndex++;
+                        }
+                    }
+
+                    // Small delay to prevent overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // Check if completed
+                if (session.currentIndex >= substances.length) {
+                    session.isComplete = true;
+                    activeScreeningSessions.delete(sampleId);
+                    updatePlayButton(sampleId, 'complete');
+                    
+                    // Re-enable all other buttons
+                    setAllPlayButtonsState(false);
+                    
+                    // Reload the data to reflect completion
+                    await loadScreeningData();
+                    renderScreeningIndexFiles();
+                    updateStats();
+                    
+                    alert(`Screening completed for sample ${sampleId}`);
+                }
+
+            } catch (error) {
+                console.error('Error during screening:', error);
+                alert('Screening error: ' + error.message);
+                activeScreeningSessions.delete(sampleId);
+                setAllPlayButtonsState(false);
+                updatePlayButton(sampleId, 'play');
+            }
+        }
+
+        // Pause screening for a sample
+        function pauseScreening(sampleId) {
+            const session = activeScreeningSessions.get(sampleId);
+            if (session) {
+                session.isPaused = true;
+                updatePlayButton(sampleId, 'play');
+                
+                // Re-enable all play buttons when pausing
+                setAllPlayButtonsState(false);
+                
+                // Clean up session after a short delay
+                setTimeout(() => {
+                    if (session.isPaused) {
+                        activeScreeningSessions.delete(sampleId);
+                    }
+                }, 100);
+            }
+        }
+
+        // Update progress bar
+        function updateProgressBar(sampleId, screened, total, percentage) {
+            const row = document.querySelector(`button[onclick*="'${sampleId}'"]`)?.closest('tr');
+            if (row) {
+                const progressFill = row.querySelector('.progress-bar-fill');
+                const progressText = row.querySelector('.progress-text');
+                
+                if (progressFill) {
+                    progressFill.style.width = `${percentage}%`;
+                    if (percentage >= 100) {
+                        progressFill.classList.add('complete');
+                    }
+                }
+                
+                if (progressText) {
+                    progressText.textContent = `${screened}/${total}`;
+                }
+            }
+        }
+
+        // Update play/pause button
+        function updatePlayButton(sampleId, state) {
+            const button = document.querySelector(`button[onclick*="'${sampleId}'"]`);
+            if (button) {
+                switch (state) {
+                    case 'play':
+                        button.innerHTML = '<i data-lucide="play" class="icon-sm"></i>';
+                        button.title = 'Resume Screening';
+                        button.disabled = false;
+                        break;
+                    case 'pause':
+                        button.innerHTML = '<i data-lucide="pause" class="icon-sm"></i>';
+                        button.title = 'Pause Screening';
+                        button.disabled = false;
+                        break;
+                    case 'complete':
+                        button.innerHTML = '<i data-lucide="check" class="icon-sm"></i>';
+                        button.title = 'Screening Complete';
+                        button.disabled = true;
+                        break;
+                }
+                lucide.createIcons();
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const total = screeningData.length;
+            const screened = screeningData.filter(s => s.substances_screened > 0).length;
+            const unscreened = screeningData.filter(s => s.substances_screened === 0).length;
+            const completionRate = total > 0 ? Math.round((screened / total) * 100) : 0;
+
+            document.getElementById('totalFiles').textContent = total;
+            document.getElementById('screenedFiles').textContent = screened;
+            document.getElementById('unprocessedFiles').textContent = unscreened;
+            document.getElementById('completionRate').textContent = completionRate + '%';
+        }
+
+        // Clear screening database
+        async function clearScreeningDatabase() {
+            if (!confirm('Are you sure you want to clear all screening data from the database? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const clearBtn = document.querySelector('.clear-db-btn');
+                const originalHTML = clearBtn.innerHTML;
+                clearBtn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Clearing...';
+                clearBtn.disabled = true;
+                lucide.createIcons();
+
+                const response = await fetch('/api/screening/clear-database', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Database cleared successfully!');
+                    // Refresh the data
+                    await loadScreeningIndexFiles();
+                } else {
+                    throw new Error(result.error || 'Failed to clear database');
+                }
+            } catch (error) {
+                console.error('Error clearing database:', error);
+                alert('Error clearing database: ' + error.message);
+            } finally {
+                const clearBtn = document.querySelector('.clear-db-btn');
+                clearBtn.innerHTML = '<i data-lucide="trash-2" class="icon-sm"></i> Delete samples';
+                clearBtn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
+
+
+
+
+        // Initialize page
+        async function initializePage() {
+            await loadScreeningIndexFiles();
+            updateStats();
+        }
+
+        // Initialize
+        initializePage();
+    </script>
+</body>
+</html>

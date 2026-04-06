@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-wolfi:9.0.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - http.max_content_length=100mb
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:${ELASTICSEARCH_PORT:-9200}"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${ELASTICSEARCH_PORT:-9200}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  init-elasticsearch:
+    build:
+      context: ./setup
+      dockerfile: Dockerfile
+    container_name: init-elasticsearch
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTIC_URL=http://elasticsearch:${ELASTICSEARCH_PORT:-9200}
+    volumes:
+      - appdata:/mnt/data
+    restart: "no"  # Run once and exit
+
+  models-semiquantification:
+    build: ./models/semiquantification
+    container_name: dsfp-semiquantification
+    ports:
+      - "${SEMIQUANTIFICATION_PORT:-8001}:${SEMIQUANTIFICATION_PORT:-8001}"
+    env_file:
+      - ./.env
+
+  models-spectral-similarity:
+    build: ./models/spectral-similarity
+    container_name: dsfp-spectral-similarity
+    ports:
+      - "${SPECTRAL_SIMILARITY_PORT:-8002}:${SPECTRAL_SIMILARITY_PORT:-8002}"
+    env_file:
+      - ./.env
+    volumes:
+      - appdata:/app
+
+  models-screening-service:
+    build: ./models/screening-service
+    container_name: dsfp-screening-service
+    ports:
+      - "${SCREENING_SERVICE_PORT:-8003}:${SCREENING_SERVICE_PORT:-8003}"
+    env_file:
+      - ./.env
+    volumes:
+      - ./models/screening-service:/app
+      - ./setup:/app/setup
+      - appdata:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["uvicorn", "screening_service:app", "--host", "0.0.0.0", "--port", "8003", "--reload"]
+    depends_on:
+      - elasticsearch
+      - models-semiquantification
+      - models-spectral-similarity
+      - models-genform
+
+  status-dashboard:
+    build: ./status-dashboard
+    container_name: status-dashboard
+    ports:
+      - "${STATUS_DASHBOARD_PORT:-9000}:${STATUS_DASHBOARD_PORT:-9000}"
+    environment:
+      - STATUS_DASHBOARD_PORT=${STATUS_DASHBOARD_PORT:-9000}
+      - HOST_DATA_PATH=C:/Users/user/source/dsfp-in-a-box/data  # Use forward slashes for Docker
+    env_file:
+      - ./.env  # Explicitly use the central .env file
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data  # Local data for uploads
+      - ./temp-uploads:/app/temp-uploads
+      - ./status-dashboard/public:/app/public  # Mount for live development
+      - ./setup:/app/setup  # Access to Elasticsearch mappings and DuckDB tracking
+      - appdata:/app/appdata  # Access to internal container data
+      - appdata:/data  # Access to DuckDB tracking database
+      - ./status-dashboard/server.js:/app/server.js
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${STATUS_DASHBOARD_PORT:-9000}/api/system"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+
+  models-genform:
+    build: ./models/genform
+    container_name: dsfp-genform
+    env_file:
+      - ./.env
+    volumes:
+      - appdata:/data
+
+  data-loader:
+    build: ./data-loader
+    container_name: dsfp-data-loader
+    env_file:
+      - ./.env
+    depends_on:
+      - elasticsearch
+      - init-elasticsearch
+    profiles:
+      - data-loading  # Only runs when explicitly started
+    volumes:
+      - ./data:/app/data
+      - ./temp-uploads:/app/uploads
+
+volumes:
+  esdata:
+  appdata:

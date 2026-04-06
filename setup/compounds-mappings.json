@@ -1,0 +1,79 @@
+{
+  "mappings": {
+    "properties": {
+      "cas": {"type": "keyword"},
+      "chemical_properties": {
+        "properties": {
+          "exp_logkow_epi_suite": {"type": "float"},
+          "logkow_epi_suite": {"type": "float"}
+        }
+      },
+      "ecotoxicity": {
+        "properties": {
+          "algae_toxicity": {"type": "float"},
+          "daphnia_toxicity": {"type": "float"},
+          "ec50_72_hr_ug_per_L": {"type": "float"},
+          "igc50_48_hr_ug_per_L": {"type": "float"},
+          "lc50_48_hr_ug_per_L": {"type": "float"},
+          "lc50_96_hr_ug_per_L": {"type": "float"},
+          "pimephales_promelas_toxicity": {"type": "float"},
+          "tetrahmena_pyriformis_toxicity": {"type": "float"},
+          "uncertainty_algae_toxicity": {"type": "keyword"},
+          "uncertainty_daphnia_toxicity": {"type": "keyword"},
+          "uncertainty_pimephales_promelas_toxicity": {"type": "keyword"},
+          "uncertainty_tetrahmena_pyriformis_toxicity": {"type": "keyword"}
+        }
+      },
+      "ext_databases": {
+        "properties": {
+          "chemspider_id": {"type": "long"},
+          "pubchem_cid": {"type": "long"}
+        }
+      },
+      "mol_formula": {"type": "keyword"},
+      "ms_information": {
+        "type": "nested",
+        "properties": {
+          "exp_adduct": {"type": "keyword"},
+          "exp_contributor": {"type": "keyword"},
+          "exp_fragments": {"type": "float"},
+          "exp_ion_type_and_collision_energy": {"type": "keyword"},
+          "exp_mz_adduct": {"type": "float"},
+          "exp_qis": {"type": "float"},
+          "exp_records": {"type": "keyword"},
+          "ionization": {"type": "keyword"},
+          "pred_cmfid_adduct": {"type": "keyword"},
+          "pred_cmfid_fragments": {"type": "float"},
+          "pred_cmfid_fragments_intensity": {"type": "keyword"},
+          "pred_cmfid_ion_type_and_collision_energy": {"type": "keyword"},
+          "pred_mz_adduct": {"type": "float"}
+        }
+      },
+      "name": {"type": "keyword"},
+      "norman_id": {"type": "keyword"},
+      "preferable_ionization": {"type": "keyword"},
+      "rti": {
+        "properties": {
+          "pred_rti_negative_esi": {"type": "float"},
+          "pred_rti_positive_esi": {"type": "float"},
+          "uncertainty_rti_neg": {"type": "keyword"},
+          "uncertainty_rti_pos": {"type": "keyword"}
+        }
+      },
+      "sle_lists": {"type": "keyword"},
+      "structure": {
+        "properties": {
+          "ms_Ready_stdinchi": {"type": "keyword"},
+          "ms_ready_smiles": {"type": "keyword"},
+          "ms_ready_stdinchikey": {"type": "keyword"},
+          "optimized_inchi": {"type": "keyword"},
+          "optimized_smiles": {"type": "keyword"},
+          "smiles": {"type": "keyword"},
+          "std_inchi": {"type": "keyword"},
+          "std_inchikey": {"type": "keyword"}
+        }
+      },
+      "validation_level": {"type": "keyword"}
+    }
+  }
+}

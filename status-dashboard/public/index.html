@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DSFP in a box</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #3498db;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        
+        .containers-section {
+            background: white;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section-header {
+            background: #076196;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .refresh-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
+        
+        .container-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1rem;
+            padding: 2rem;
+        }
+        
+        .container-card {
+            border: 1px solid #ecf0f1;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        
+        .container-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .container-header {
+            padding: 1rem;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .container-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .status-running {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+        
+        .status-stopped {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+        
+        .status-paused {
+            background: #fdf2e9;
+            color: #f39c12;
+        }
+        
+        .container-details {
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        
+        .detail-label {
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+        
+        .ports {
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        
+        .service-type {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            background: #ecf0f1;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #2c3e50;
+        }
+        
+        .container-actions {
+            padding: 1rem;
+            border-top: 1px solid #ecf0f1;
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .action-btn {
+            padding: 0.4rem 0.8rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            flex: 1;
+        }
+        
+        .btn-start {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-restart {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .btn-disabled {
+            background: #bdc3c7;
+            color: #7f8c8d;
+            cursor: not-allowed;
+        }
+        
+        .reload-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.6rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+            transition: background 0.2s;
+        }
+        
+        .reload-btn:hover {
+            background: #229954;
+        }
+        
+        .reload-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.6rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+            transition: background 0.2s;
+        }
+        
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+        
+        .delete-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #7f8c8d;
+        }
+        
+        .error {
+            background: #fadbd8;
+            color: #e74c3c;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        
+        .last-updated {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.8rem;
+            margin-top: 1rem;
+        }
+        
+        .custom-section {
+            background: white;
+            border-radius: 8px;
+            margin-top: 2rem;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .health-status {
+            padding: 1rem 2rem;
+        }
+        
+        .health-overall {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+        
+        .health-healthy {
+            color: #27ae60;
+        }
+        
+        .health-unhealthy {
+            color: #e74c3c;
+        }
+        
+        .recommendations {
+            margin-top: 1rem;
+        }
+        
+        .recommendation {
+            background: #fff3cd;
+            color: #856404;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .docs-link {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        
+        .docs-link:hover {
+            background: #2980b9;
+            color: white;
+        }
+    </style>
+    <script>
+        fetch('header.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('shared-header').innerHTML = html;
+                lucide.createIcons();
+            });
+    </script>
+</head>
+<body>
+    
+    <div id="shared-header"></div>
+
+    <div class="container">
+        
+        <!-- Project Information Section -->
+        <div class="card">
+            <div class="section-header">
+                <h2><i data-lucide="info" class="icon-md"></i> About DSFP in a Box</h2>
+            </div>
+            <div class="section-content">
+                <div class="info-box">
+                    <h3><i data-lucide="box" class="icon-md"></i> Digital Sample Freezing Platform - in a box!</h3>
+                    <p>
+                        This is a containerized prototype of DSFP services, 
+                        designed to run entirely on a localized environment without requiring internet connectivity for analysis operations.
+                    </p>
+                    
+                    <h4><i data-lucide="target" class="icon-md"></i> What DSFP Does</h4>
+                    <p>
+                        DSFP performs advanced non-targeted screening of samples against the NORMAN Substance Database compounds to:
+                    </p>
+                    <ul>
+                        <li><strong>Identify substances:</strong> Match spectral patterns to known compounds in the database</li>
+                        <li><strong>Screen samples:</strong> Process LC-MS/MS data files to detect substances of interest</li>
+                        <li><strong>Analyze results:</strong> Generate comprehensive reports with spectral similarity scores</li>
+                        <li><strong>Track progress:</strong> Maintain a complete audit trail of all screening operations</li>
+                    </ul>
+                    
+                    <h4><i data-lucide="workflow" class="icon-md"></i> How It Works</h4>
+                    <ol>
+                        <li><strong>Data Storage:</strong> Upload DSFP data (JSON format)</li>
+                        <li><strong>Compound Database:</strong> Pre-loaded with 95,000+ compounds and their spectral characteristics</li>
+                        <li><strong>Screening:</strong> Select samples and run automated screening against the compound database</li>
+                        <li><strong>Results:</strong> Review matches with spectral similarity scores, retention times, and detailed metadata</li>
+                    </ol>
+                    
+                    <h4><i data-lucide="layers" class="icon-md"></i> System Components</h4>
+                    <ul>
+                        <li><strong>Elasticsearch:</strong> High-performance database for compounds and sample data</li>
+                        <li><strong>Screening Service:</strong> Python-based API for running screening algorithms</li>
+                        <li><strong>Status Dashboard:</strong> Web interface for monitoring and management</li>
+                        <li><strong>DuckDB:</strong> Local database for tracking screening progress and results</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Custom Health Check Section -->
+        <div class="card">
+            <div class="section-header">
+                <h2><i data-lucide="activity" class="icon-md"></i> System Health Check</h2>
+                <button class="btn btn-success" onclick="refreshHealthCheck()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
+            </div>
+            <div class="health-status" id="healthStatus">
+                <div class="loading">Checking system health...</div>
+            </div>
+        </div>
+
+        <!-- Containers List -->
+        <div class="card containers-section">
+            <div class="section-header">
+                <h2><i data-lucide="box" class="icon-md"></i> Container Status</h2>
+                <button class="btn btn-success" onclick="refreshData()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
+            </div>
+            <div id="containersContent">
+                <div class="loading">Loading containers...</div>
+            </div>
+        </div>
+
+
+        <div class="last-updated" id="lastUpdated"></div>
+    </div>
+
+    <script>
+        let containers = [];
+        let systemInfo = {};
+
+        async function fetchContainers() {
+            try {
+                const response = await fetch('/api/containers');
+                const data = await response.json();
+                if (data.success) {
+                    containers = data.containers;
+                    updateContainersView();
+                    updateLastUpdated();
+                } else {
+                    showError('Failed to fetch containers: ' + data.error);
+                }
+            } catch (error) {
+                showError('Network error: ' + error.message);
+            }
+        }
+
+        async function fetchSystemInfo() {
+            try {
+                const response = await fetch('/api/system');
+                const data = await response.json();
+                if (data.success) {
+                    systemInfo = data.system;
+                    // updateStatsView(); // Commented out - corresponding HTML elements don't exist
+                }
+            } catch (error) {
+                console.error('Failed to fetch system info:', error);
+            }
+        }
+
+        async function fetchHealthCheck() {
+            try {
+                const response = await fetch('/api/custom/health-check');
+                const data = await response.json();
+                if (data.success) {
+                    updateHealthView(data.health);
+                } else {
+                    showHealthError('Health check failed: ' + data.error);
+                }
+            } catch (error) {
+                showHealthError('Network error: ' + error.message);
+            }
+        }
+
+        // function updateStatsView() {
+        //     document.getElementById('totalContainers').textContent = systemInfo.containers || '-';
+        //     //document.getElementById('runningContainers').textContent = systemInfo.containersRunning || '-';
+        //     document.getElementById('stoppedContainers').textContent = systemInfo.containersStopped || '-';
+        //     document.getElementById('totalImages').textContent = systemInfo.images || '-';
+        // }
+
+        async function updateContainersView() {
+            const content = document.getElementById('containersContent');
+            
+            if (containers.length === 0) {
+                content.innerHTML = '<div class="loading">No containers found</div>';
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'container-grid';
+
+            for (const container of containers) {
+                const card = await createContainerCard(container);
+                grid.appendChild(card);
+            }
+
+            content.innerHTML = '';
+            content.appendChild(grid);
+            
+            // Add event listeners for dynamically created buttons after all cards are created
+            const reloadBtn = document.getElementById('reload-compounds-btn');
+            if (reloadBtn) {
+                console.log('Reload button found, attaching event listener');
+                reloadBtn.addEventListener('click', reloadCompounds);
+                // Check reload status and update button state
+                await checkAndUpdateReloadButtonState();
+            } else {
+                console.log('Reload button not found');
+            }
+            
+            const deleteBtn = document.getElementById('delete-compounds-btn');
+            if (deleteBtn) {
+                console.log('Delete button found, attaching event listener');
+                deleteBtn.addEventListener('click', deleteCompounds);
+            } else {
+                console.log('Delete button not found');
+            }
+        }
+
+        async function createContainerCard(container) {
+            const card = document.createElement('div');
+            card.className = 'container-card';
+
+            const statusClass = container.state === 'running' ? 'status-running' : 
+                               container.state === 'paused' ? 'status-paused' : 'status-stopped';
+
+            const ports = container.ports.length > 0 ? 
+                container.ports.map(p => p.publicPort ? `${p.publicPort}:${p.privatePort}` : `${p.privatePort}`).join(', ') :
+                'None';
+
+            // Get the main public port for documentation link
+            const mainPort = container.ports.find(p => p.publicPort);
+            const hasDocumentation = ( container.serviceType === 'analysis') && container.isRunning && mainPort;
+            const docsUrl = hasDocumentation ? `http://localhost:${mainPort.publicPort}/__docs__/` : null;
+
+            // Fetch Elasticsearch stats if this is an Elasticsearch container
+            let esStatsHtml = '';
+            if (container.name === 'elasticsearch' && container.isRunning) {
+                try {
+                    const esStats = await fetchElasticsearchStats();
+                    if (esStats.success) {
+                        const compoundsCount = esStats.stats.indexDetails?.compounds?.docCount || 0;
+                        const samplesCount = esStats.stats.indexDetails?.samples?.docCount || 0;
+                        
+                        const trackingCount = esStats.stats?.indexDetails?.tracking?.docCount || 0;
+                        
+                        esStatsHtml = `
+                            <div class="detail-row">
+                                <span class="detail-label">Compounds loaded:</span>
+                                <span><b>${compoundsCount.toLocaleString()}</b>
+                                    <button class="reload-btn" id="reload-compounds-btn" title="Reload compounds from remote URL">
+                                        <i data-lucide="refresh-cw" class="icon-sm"></i> Reload
+                                    </button>
+                                    <button class="delete-btn" id="delete-compounds-btn" title="Delete all compounds data">
+                                        <i data-lucide="trash-2" class="icon-sm"></i> Delete
+                                    </button>
+                                </span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Samples loaded:</span>
+                                <span><b>${trackingCount.toLocaleString()}</b></span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Storage:</span>
+                                <span>${formatBytes(esStats.stats.totalSize)}</span>
+                            </div>
+                        `;
+                        
+                        // Create icons after HTML is set
+                        setTimeout(() => lucide.createIcons(), 0);
+                    }
+                } catch (error) {
+                    console.error('Error fetching ES stats:', error);
+                }
+            }
+
+            card.innerHTML = `
+                <div class="container-header">
+                    <div class="container-name">${container.name}</div>
+                    <span class="status-badge ${statusClass}">${container.state}</span>
+                    <span class="service-type">${container.serviceType}</span>
+                </div>
+                <div class="container-details">
+                    <div class="detail-row">
+                        <span class="detail-label">ID:</span>
+                        <span>${container.id}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Ports:</span>
+                        <span class="ports">${ports}</span>
+                    </div>
+                    ${esStatsHtml}
+                    ${hasDocumentation ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Documentation:</span>
+                        <a href="${docsUrl}" target="_blank" class="docs-link"><i data-lucide="book-open" class="icon-sm"></i> API Docs</a>
+                    </div>
+                    ` : ''}
+                    ${container.uptime ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Uptime:</span>
+                        <span>${container.uptime}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                <div class="container-actions">
+                    <button class="action-btn btn-start ${container.isRunning ? 'btn-disabled' : ''}" 
+                            onclick="containerAction('${container.id}', 'start')"
+                            ${container.isRunning ? 'disabled' : ''}>
+                        <i data-lucide="play" class="icon-sm"></i> Start
+                    </button>
+                    <button class="action-btn btn-stop ${!container.isRunning ? 'btn-disabled' : ''}" 
+                            onclick="containerAction('${container.id}', 'stop')"
+                            ${!container.isRunning ? 'disabled' : ''}>
+                        <i data-lucide="square" class="icon-sm"></i> Stop
+                    </button>
+                    <button class="action-btn btn-restart ${!container.isRunning ? 'btn-disabled' : ''}" 
+                            onclick="containerAction('${container.id}', 'restart')"
+                            ${!container.isRunning ? 'disabled' : ''}>
+                        <i data-lucide="refresh-cw" class="icon-sm"></i> Restart
+                    </button>
+                </div>
+            `;
+            
+            // Create icons after HTML is set
+            setTimeout(() => lucide.createIcons(), 0);
+
+            return card;
+        }
+
+        function updateHealthView(health) {
+            const content = document.getElementById('healthStatus');
+            const overallClass = health.overall === 'healthy' ? 'health-healthy' : 'health-unhealthy';
+            
+            let html = `
+                <div class="health-overall ${overallClass}">
+                    <i data-lucide="${health.overall === 'healthy' ? 'check-circle' : 'alert-circle'}" class="icon-md"></i>
+                    Project Status: ${health.overall.toUpperCase()}
+                </div>
+            `;
+
+
+            if (health.recommendations && health.recommendations.length > 0) {
+                html += '<div class="recommendations"><strong>Recommendations:</strong>';
+                health.recommendations.forEach(rec => {
+                    html += `<div class="recommendation"><i data-lucide="lightbulb" class="icon-sm"></i> ${rec}</div>`;
+                });
+                html += '</div>';
+            }
+
+            content.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        async function containerAction(id, action) {
+            try {
+                const response = await fetch(`/api/containers/${id}/${action}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Refresh data after action
+                    setTimeout(() => {
+                        refreshData();
+                    }, 1000);
+                } else {
+                    alert('Action failed: ' + data.error);
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
+            }
+        }
+
+        function showError(message) {
+            const content = document.getElementById('containersContent');
+            content.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function showHealthError(message) {
+            const content = document.getElementById('healthStatus');
+            content.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        function updateLastUpdated() {
+            const now = new Date().toLocaleString();
+            document.getElementById('lastUpdated').textContent = `Last updated: ${now}`;
+        }
+
+        function refreshData() {
+            fetchContainers();
+            fetchSystemInfo();
+        }
+
+        function refreshHealthCheck() {
+            fetchHealthCheck();
+        }
+
+        // Initial load
+        refreshData();
+        fetchHealthCheck();
+
+        // Auto-refresh every 30 seconds
+        setInterval(refreshData, 30000);
+        setInterval(refreshHealthCheck, 60000);
+
+        // Function to fetch Elasticsearch stats
+        async function fetchElasticsearchStats() {
+            try {
+                const response = await fetch('/api/elasticsearch/stats');
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Failed to fetch Elasticsearch stats:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Function to format bytes
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Function to check reload status and update button state
+        async function checkAndUpdateReloadButtonState() {
+            const btn = document.getElementById('reload-compounds-btn');
+            if (!btn) return;
+            
+            try {
+                const response = await fetch('/api/reload-compounds/status');
+                const data = await response.json();
+                
+                if (data.success && data.status === 'running') {
+                    // Reload is currently running
+                    btn.disabled = true;
+                    btn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Loading...';
+                    btn.style.opacity = '0.6';
+                    lucide.createIcons();
+                    
+                    // Start monitoring the reload process
+                    monitorReloadProcess();
+                } else {
+                    // No reload running, button should be active
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="refresh-cw" class="icon-sm"></i> Reload';
+                    btn.style.opacity = '1';
+                    lucide.createIcons();
+                }
+            } catch (error) {
+                console.log('Error checking reload status (possibly no reload has been started):', error);
+                // If error (likely 404 - no reload container found), button should be active
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="refresh-cw" class="icon-sm"></i> Reload';
+                btn.style.opacity = '1';
+                lucide.createIcons();
+            }
+        }
+        
+        // Function to monitor an ongoing reload process
+        async function monitorReloadProcess() {
+            const btn = document.getElementById('reload-compounds-btn');
+            if (!btn) return;
+            
+            const checkStatus = async () => {
+                try {
+                    const response = await fetch('/api/reload-compounds/status');
+                    const data = await response.json();
+                    
+                    if (data.success && data.status === 'running') {
+                        // Still running, check again
+                        setTimeout(checkStatus, 3000);
+                    } else {
+                        // Process finished or not found
+                        setTimeout(async () => {
+                            await refreshData();
+                            btn.innerHTML = '<i data-lucide="refresh-cw" class="icon-sm"></i> Reload';
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            lucide.createIcons();
+                        }, 1000);
+                    }
+                } catch (error) {
+                    // Error likely means no reload container found (finished)
+                    setTimeout(async () => {
+                        await refreshData();
+                        btn.innerHTML = '<i data-lucide="refresh-cw" class="icon-sm"></i> Reload';
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        lucide.createIcons();
+                    }, 1000);
+                }
+            };
+            
+            checkStatus();
+        }
+
+        // Function to reload compounds data
+        async function reloadCompounds() {
+            console.log('reloadCompounds function called');
+            const btn = document.getElementById('reload-compounds-btn');
+            if (!btn) {
+                console.log('Button not found in reloadCompounds function');
+                return;
+            }
+            
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '↻ Loading...';
+            
+            try {
+                const response = await fetch('/api/reload-compounds', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    btn.innerHTML = '✓ Started';
+                    btn.style.opacity = '0.6';
+                    
+                    // Start monitoring the reload process
+                    setTimeout(() => {
+                        monitorReloadProcess();
+                    }, 3000);
+                    
+                } else {
+                    alert('Failed to start compounds reload: ' + data.error);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+                
+            } catch (error) {
+                console.error('Error reloading compounds:', error);
+                alert('Error starting compounds reload: ' + error.message);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Function to delete compounds data
+        async function deleteCompounds() {
+            const btn = document.getElementById('delete-compounds-btn');
+            if (!btn) return;
+            
+            // Confirm deletion
+            if (!confirm('Are you sure you want to delete all compounds data? This action cannot be undone.')) {
+                return;
+            }
+            
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader" class="icon-sm"></i> Deleting...';
+            lucide.createIcons();
+            
+            try {
+                const response = await fetch('/api/compounds', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    btn.innerHTML = '<i data-lucide="check" class="icon-sm"></i> Deleted';
+                    lucide.createIcons();
+                    
+                    // Refresh data after deletion
+                    setTimeout(async () => {
+                        await refreshData();
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                        lucide.createIcons();
+                    }, 1000);
+                    
+                } else {
+                    alert('Failed to delete compounds: ' + data.error);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    lucide.createIcons();
+                }
+                
+            } catch (error) {
+                console.error('Error deleting compounds:', error);
+                alert('Error deleting compounds: ' + error.message);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

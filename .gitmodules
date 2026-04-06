@@ -1,0 +1,3 @@
+[submodule "dsfp-server"]
+	path = dsfp-server
+	url = https://katsivelisp@bitbucket.org/venthic/dsfp-server.git

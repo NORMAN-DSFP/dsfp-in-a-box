@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detections - DSFP Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Page-specific styles */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bot                    <div class="empty-state">
+                        <h3>Error Loading Detection Results</h3>
+                        <p>${error.message}</p>
+                        <button class="btn btn-success" onclick="loadDetections()"><i data-lucide="refresh-cw" class="icon-sm"></i> Try Again</button>
+                    </div>
+                `;
+           // Toggle matches display
+        function toggleMatches(index) {
+            const matchesRow = document.getElementById(`matches-${index}`);
+            const expandBtn = document.querySelector(`.expand-btn[data-row="${index}"]`);
+            
+            if (matchesRow.style.display === 'none') {
+                matchesRow.style.display = 'table-row';
+                const icon = expandBtn.querySelector('i[data-lucide]');
+                if (icon) {
+                    icon.setAttribute('data-lucide', 'chevron-down');
+                    lucide.createIcons();
+                }
+                expandBtn.classList.add('expanded');
+            } else {
+                matchesRow.style.display = 'none';
+                const icon = expandBtn.querySelector('i[data-lucide]');
+                if (icon) {
+                    icon.setAttribute('data-lucide', 'chevron-right');
+                    lucide.createIcons();
+                }
+                expandBtn.classList.remove('expanded');
+            }
+        }cument.getElementById('tableViewContainer').innerHTML = errorHTML;
+                document.getElementById('heatmapViewContainer').innerHTML = errorHTML;
+                lucide.createIcons();
+            }
+        }
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #076196;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+            display: inline-flex;
+            border: 2px solid #3498db;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-left: 0.5rem;
+            margin-right: 0.5rem;
+        }
+
+        .view-toggle-btn {
+            background:#3498db;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+            border-right: 1px solid #3498db;
+        }
+
+        .view-toggle-btn:last-child {
+            border-right: none;
+        }
+
+        .view-toggle-btn:hover {
+            background: #076196;
+        }
+
+        .view-toggle-btn.active {
+            background: #076196;
+            color: white;
+        }
+
+        .clear-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-left: 0.5rem;
+        }
+
+        .clear-btn:hover {
+            background: #c0392b;
+        }
+
+        .clear-filter-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .clear-filter-btn:hover {
+            background: #7f8c8d;
+        }
+        
+        .view-toggle-container {
+            display: inline-flex;
+            border: 2px solid #3498db;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-left: 0.5rem;
+            margin-right: 0.5rem;
+        }
+
+        .view-toggle-btn {
+            background: white;
+            color: #3498db;
+            border: none;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        .view-toggle-btn:hover {
+            background: #e8f4f8;
+        }
+
+        .view-toggle-btn.active {
+            background: #3498db;
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: #ecf0f1;
+            border-radius: 6px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #076196;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.25rem;
+        }
+
+        .detections-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .detections-table th,
+        .detections-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .detections-table th {
+            background: #f8f9fa;
+            color: #2c3e50;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .detections-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .score-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .ip-score {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .expand-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #076196;
+            padding: 0.25rem 0.5rem;
+            transition: transform 0.2s ease;
+        }
+
+        .expand-btn:hover {
+            background: #f0f0f0;
+            border-radius: 3px;
+        }
+
+        .expand-btn.expanded {
+            transform: rotate(0deg);
+        }
+
+        .matches-row {
+            background: #f8f9fa;
+        }
+
+        .matches-container {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            border-left: 3px solid #076196;
+        }
+
+        .matches-container h4 {
+            margin-bottom: 0.75rem;
+            color: #076196;
+            font-size: 1rem;
+        }
+
+        .matches-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 0.85rem;
+        }
+
+        .matches-table th {
+            background: #e9ecef;
+            padding: 0.5rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .matches-table td {
+            padding: 0.5rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .matches-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #7f8c8d;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #7f8c8d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .heatmap-container {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+
+        .heatmap-table {
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            min-width: 100%;
+        }
+
+        .heatmap-table th {
+            background: #f8f9fa;
+            color: #2c3e50;
+            font-weight: 600;
+            padding: 0.5rem;
+            border: 1px solid #ecf0f1;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .heatmap-table th.substance-col {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background: #076196;
+            color: white;
+            text-align: left;
+            min-width: 200px;
+        }
+
+        .heatmap-table td {
+            border: 1px solid #ecf0f1;
+            padding: 0.5rem;
+            text-align: center;
+            min-width: 80px;
+        }
+
+        .heatmap-table td.substance-name {
+            position: sticky;
+            left: 0;
+            background: #f8f9fa;
+            font-weight: 600;
+            text-align: left;
+            z-index: 5;
+        }
+
+        .heatmap-table td.heatmap-cell {
+            font-weight: 600;
+            text-align: center;
+            color: #333;
+        }
+
+        .heatmap-table td.heatmap-not-detected {
+            color: #757575;
+            background: #e0e0e0;
+        }
+
+        .heatmap-table td.heatmap-no-match {
+            background: #e0e0e0;
+            color: #757575;
+        }
+
+        /* Color gradient for detected values will be applied inline */
+        .heatmap-table td.heatmap-value {
+            color: #000;
+        }
+
+        .view-container {
+            display: none;
+        }
+
+        .view-container.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .detections-table {
+                font-size: 0.8rem;
+            }
+            
+            .detections-table th,
+            .detections-table td {
+                padding: 0.5rem;
+            }
+        }
+    </style>
+    <script>
+        fetch('header.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('shared-header').innerHTML = html;
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+            });
+    </script>
+</head>
+<body>
+    
+    <div id="shared-header"></div>
+
+    <div class="container">
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="samplesAnalyzed">-</div>
+                <div class="stat-label">Samples Shown</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalDetections">-</div>
+                <div class="stat-label">Total Detections</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="uniqueSubstances">-</div>
+                <div class="stat-label">Unique Substances</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgIpScore">-</div>
+                <div class="stat-label">Avg IP Score</div>
+            </div>
+        </div>
+
+        <!-- Detections Section -->
+        <div class="card">
+            <div class="section-header">
+                <h2><i data-lucide="search" class="icon-md"></i> Detection Results</h2>
+                <div>
+                    <div class="view-toggle-container">
+                        <button class="view-toggle-btn active" id="tableViewBtn" onclick="switchView('table')"><i data-lucide="bar-chart-3" class="icon-sm"></i> Table</button>
+                        <button class="view-toggle-btn" id="heatmapViewBtn" onclick="switchView('heatmap')"><i data-lucide="map" class="icon-sm"></i> Heatmap</button>
+                    </div>
+                    <button class="btn btn-success" onclick="loadDetections()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
+                    <button class="btn btn-danger" onclick="clearDetections()"><i data-lucide="trash-2" class="icon-sm"></i> Clear Detections</button>
+                </div>
+            </div>
+            
+            <div class="section-content">
+                <!-- Filter Controls -->
+                <div class="filter-controls">
+                    <span class="filter-label">Filter by Sample:</span>
+                    <select id="sampleFilter" class="filter-select" onchange="filterBySample()">
+                        <option value="">All Samples</option>
+                    </select>
+                    <button class="clear-filter-btn" onclick="clearFilter()">Clear Filter</button>
+                </div>
+
+                <div id="detectionsContainer">
+                    <div class="view-container active" id="tableViewContainer">
+                        <div class="loading">
+                            <i data-lucide="loader" class="icon-md"></i> Loading detection results...
+                        </div>
+                    </div>
+                    <div class="view-container" id="heatmapViewContainer">
+                        <div class="loading">
+                            <i data-lucide="loader" class="icon-md"></i> Loading heatmap...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let allDetections = [];
+        let allSamples = [];
+        let currentFilter = null;
+        let currentView = 'table';
+
+        // Initialize page
+        async function initializePage() {
+            // Check for URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const sampleIdParam = urlParams.get('sample_id');
+            
+            if (sampleIdParam) {
+                currentFilter = sampleIdParam;
+            }
+
+            await loadSamples();
+            await loadDetections();
+            updateViewButtons();
+        }
+
+        // Load samples for filter dropdown
+        async function loadSamples() {
+            try {
+                const response = await fetch('/api/tracking/files');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allSamples = data.files || [];
+                    populateSampleFilter();
+                }
+            } catch (error) {
+                console.error('Error loading samples:', error);
+            }
+        }
+
+        // Populate sample filter dropdown
+        function populateSampleFilter() {
+            const filterSelect = document.getElementById('sampleFilter');
+            
+            // Clear existing options except "All Samples"
+            filterSelect.innerHTML = '<option value="">All Samples</option>';
+            
+            // Add sample options
+            allSamples.forEach(sample => {
+                const option = document.createElement('option');
+                option.value = sample.sample_id;
+                option.textContent = `${sample.short_name || 'Unknown'} (${sample.sample_id})`;
+                
+                if (currentFilter && currentFilter === sample.sample_id) {
+                    option.selected = true;
+                }
+                
+                filterSelect.appendChild(option);
+            });
+        }
+
+        // Load detections from API
+        async function loadDetections() {
+            try {
+                document.getElementById('tableViewContainer').innerHTML = '<div class="loading">🔍 Loading detection results...</div>';
+                document.getElementById('heatmapViewContainer').innerHTML = '<div class="loading">🔍 Loading heatmap...</div>';
+                
+                const url = currentFilter 
+                    ? `/api/detections?sample_id=${encodeURIComponent(currentFilter)}`
+                    : '/api/detections';
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.success) {
+                    allDetections = data.detections || [];
+                    updateStats();
+                    renderTableView();
+                    renderHeatmapView();
+                } else {
+                    throw new Error(data.error || 'Failed to load detections');
+                }
+            } catch (error) {
+                console.error('Error loading detections:', error);
+                const errorHTML = `
+                    <div class="empty-state">
+                        <h3>Error Loading Detections</h3>
+                        <p>${error.message}</p>
+                        <button class="refresh-btn" onclick="loadDetections()">🔄 Try Again</button>
+                    </div>
+                `;
+                document.getElementById('tableViewContainer').innerHTML = errorHTML;
+                document.getElementById('heatmapViewContainer').innerHTML = errorHTML;
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            const total = allDetections.length;
+            const uniqueSubstances = new Set(allDetections.map(d => d.substance_name)).size;
+            const uniqueSamples = new Set(allDetections.map(d => d.sample_id)).size;
+            
+            const ipScores = allDetections
+                .map(d => d.ip_score)
+                .filter(s => s !== null && s !== undefined && typeof s === 'number');
+            
+            const avgIpScore = ipScores.length > 0 
+                ? ((ipScores.reduce((a, b) => a + b, 0) / ipScores.length) * 100).toFixed(1) + '%'
+                : 'N/A';
+
+            document.getElementById('samplesAnalyzed').textContent = uniqueSamples;
+            document.getElementById('totalDetections').textContent = total;
+            document.getElementById('uniqueSubstances').textContent = uniqueSubstances;
+            document.getElementById('avgIpScore').textContent = avgIpScore;
+        }
+
+        // Render detections table
+        function renderTableView() {
+            const container = document.getElementById('tableViewContainer');
+            
+            if (allDetections.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Detections Found</h3>
+                        <p>No screening results available${currentFilter ? ' for the selected sample' : ''}.</p>
+                        <p style="margin-top: 1rem;">
+                            ${currentFilter 
+                                ? 'To screen this sample, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a>.'
+                                : 'To start screening samples, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a> for targeted analysis.'}
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            const tableHTML = `
+                <div class="table-container">
+                    <table class="detections-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Short Name</th>
+                                <th>Substance</th>
+                                <th>Sample Type</th>
+                                <th>Ionization</th>
+                                <th>IP Score</th>
+                                <th>RTI Score</th>
+                                <th>M/Z Score</th>
+                                <th>Fragment Score</th>
+                                <th>Spectral Similarity</th>
+                                <th>Isotopic Fit</th>
+                                <th>Formula Fit</th>
+                                <th>Semiquant Method</th>
+                                <th>Concentration</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${allDetections.map((detection, index) => {
+                                const ipScore = detection.ip_score;
+                                const ipScorePercent = ipScore !== null && ipScore !== undefined ? (ipScore * 100).toFixed(1) + '%' : 'N/A';
+                                const hasMatches = detection.matches && detection.matches.length > 0;
+                                
+                                return `
+                                    <tr>
+                                        <td>
+                                            ${hasMatches ? `<button class="expand-btn" onclick="toggleMatches(${index})" data-row="${index}">▶</button>` : ''}
+                                        </td>
+                                        <td><strong>${detection.short_name || 'Unknown'}</strong></td>
+                                        <td><strong>${detection.substance_name || 'N/A'}</strong></td>
+                                        <td>${detection.sample_type || 'N/A'}</td>
+                                        <td>${detection.ionization || 'N/A'}</td>
+                                        <td class="ip-score">${ipScorePercent}</td>
+                                        <td>${detection.rti_score !== null && detection.rti_score !== undefined ? detection.rti_score.toFixed(3) : 'N/A'}</td>
+                                        <td>${detection.mz_score !== null && detection.mz_score !== undefined ? detection.mz_score.toFixed(3) : 'N/A'}</td>
+                                        <td>${detection.fragments_score !== null && detection.fragments_score !== undefined ? detection.fragments_score.toFixed(3) : 'N/A'}</td>
+                                        <td>${detection.spectral_similarity_score !== null && detection.spectral_similarity_score !== undefined ? detection.spectral_similarity_score.toFixed(3) : 'N/A'}</td>
+                                        <td>${detection.isotopic_fit_score !== null && detection.isotopic_fit_score !== undefined ? detection.isotopic_fit_score.toFixed(3) : 'N/A'}</td>
+                                        <td>${detection.molecular_formula_fit_score !== null && detection.molecular_formula_fit_score !== undefined ? detection.molecular_formula_fit_score.toFixed(3) : 'N/A'}</td>
+                                        <td>${detection.semiquant_method || 'N/A'}</td>
+                                        <td>${detection.concentration !== null && detection.concentration !== undefined ? detection.concentration.toFixed(2) : 'N/A'}</td>
+                                    </tr>
+                                    ${hasMatches ? `
+                                    <tr class="matches-row" id="matches-${index}" style="display: none;">
+                                        <td colspan="14">
+                                            <div class="matches-container">
+                                                <h4>Matches (${detection.matches.length})</h4>
+                                                <table class="matches-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Peak Area</th>
+                                                            <th>m/z</th>
+                                                            <th>Max Intensity</th>
+                                                            <th>RT (min)</th>
+                                                            <th>LC RTI</th>
+                                                            <th>GC RTI</th>
+                                                            <th>MS/MS</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        ${detection.matches.map(match => `
+                                                            <tr>
+                                                                <td>${match.peak_area !== null && match.peak_area !== undefined && typeof match.peak_area === 'number' ? match.peak_area.toFixed(0) : 'N/A'}</td>
+                                                                <td>${match.mz !== null && match.mz !== undefined && typeof match.mz === 'number' ? match.mz.toFixed(4) : 'N/A'}</td>
+                                                                <td>${match.max_intensity !== null && match.max_intensity !== undefined && typeof match.max_intensity === 'number' ? match.max_intensity.toFixed(0) : 'N/A'}</td>
+                                                                <td>${match.rt_minutes !== null && match.rt_minutes !== undefined && typeof match.rt_minutes === 'number' ? match.rt_minutes.toFixed(2) : 'N/A'}</td>
+                                                                <td>${match.lc_retention_index !== null && match.lc_retention_index !== undefined && typeof match.lc_retention_index === 'number' ? match.lc_retention_index.toFixed(2) : 'N/A'}</td>
+                                                                <td>${match.gc_retention_time_index !== null && match.gc_retention_time_index !== undefined && typeof match.gc_retention_time_index === 'number' ? match.gc_retention_time_index.toFixed(2) : 'N/A'}</td>
+                                                                <td>${match.ms_ms_available ? 'Yes' : 'No'}</td>
+                                                            </tr>
+                                                        `).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    ` : ''}
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = tableHTML;
+            lucide.createIcons();
+        }
+
+        // Render heatmap view
+        function renderHeatmapView() {
+            const container = document.getElementById('heatmapViewContainer');
+            
+            if (allDetections.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Detections Found</h3>
+                        <p>No screening results available${currentFilter ? ' for the selected sample' : ''}.</p>
+                        <p style="margin-top: 1rem;">
+                            ${currentFilter 
+                                ? 'To screen this sample, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a>.'
+                                : 'To start screening samples, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a> for targeted analysis.'}
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Get unique substances and samples
+            const substances = [...new Set(allDetections.map(d => d.substance_name))].sort();
+            const samples = [...new Set(allDetections.map(d => d.short_name || d.sample_id))].sort();
+
+            // Create a map for quick lookup
+            const detectionMap = {};
+            allDetections.forEach(d => {
+                const key = `${d.substance_name}_${d.short_name || d.sample_id}`;
+                detectionMap[key] = d;
+            });
+
+            // Collect all values for color gradient calculation
+            const allValues = [];
+            substances.forEach(substance => {
+                samples.forEach(sample => {
+                    const key = `${substance}_${sample}`;
+                    const detection = detectionMap[key];
+                    
+                    if (detection) {
+                        const hasMatches = detection.matches && detection.matches.length > 0;
+                        if (hasMatches) {
+                            const hasConcentration = detection.concentration !== null && 
+                                                    detection.concentration !== undefined && 
+                                                    typeof detection.concentration === 'number';
+                            
+                            if (hasConcentration) {
+                                allValues.push(detection.concentration);
+                            } else {
+                                const peakAreas = detection.matches
+                                    .map(m => m.peak_area)
+                                    .filter(pa => pa !== null && pa !== undefined && typeof pa === 'number');
+                                
+                                if (peakAreas.length > 0) {
+                                    allValues.push(Math.max(...peakAreas));
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+
+            // Calculate min and max for color gradient
+            const minValue = allValues.length > 0 ? Math.min(...allValues) : 0;
+            const maxValue = allValues.length > 0 ? Math.max(...allValues) : 1;
+
+            // Helper function to get color based on value
+            function getColorForValue(value) {
+                if (maxValue === minValue) {
+                    // All values are the same, use middle color
+                    return 'rgb(255, 255, 150)';
+                }
+                
+                // Normalize value between 0 and 1
+                const normalized = (value - minValue) / (maxValue - minValue);
+                
+                // Color gradient from light yellow (low) to dark orange/red (high)
+                // Light yellow: rgb(255, 255, 200)
+                // Medium yellow: rgb(255, 200, 100)
+                // Orange: rgb(255, 150, 50)
+                // Dark orange/red: rgb(200, 50, 0)
+                
+                let r, g, b;
+                if (normalized < 0.5) {
+                    // Light yellow to medium yellow
+                    const t = normalized * 2; // 0 to 1
+                    r = 255;
+                    g = Math.round(255 - (55 * t));
+                    b = Math.round(200 - (100 * t));
+                } else {
+                    // Medium yellow to dark orange/red
+                    const t = (normalized - 0.5) * 2; // 0 to 1
+                    r = Math.round(255 - (55 * t));
+                    g = Math.round(200 - (150 * t));
+                    b = Math.round(100 - (100 * t));
+                }
+                
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+
+            const heatmapHTML = `
+                <div class="heatmap-container">
+                    <table class="heatmap-table">
+                        <thead>
+                            <tr>
+                                <th class="substance-col">Substance / Sample</th>
+                                ${samples.map(sample => `<th>${sample}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${substances.map(substance => `
+                                <tr>
+                                    <td class="substance-name">${substance}</td>
+                                    ${samples.map(sample => {
+                                        const key = `${substance}_${sample}`;
+                                        const detection = detectionMap[key];
+                                        
+                                        if (detection) {
+                                            // Check if there are matches (actual detection)
+                                            const hasMatches = detection.matches && detection.matches.length > 0;
+                                            
+                                            if (!hasMatches) {
+                                                // No matches = no detection
+                                                return `<td class="heatmap-cell heatmap-no-match">N/A</td>`;
+                                            }
+                                            
+                                            // Has matches - show concentration or max peak area
+                                            const hasConcentration = detection.concentration !== null && 
+                                                                    detection.concentration !== undefined && 
+                                                                    typeof detection.concentration === 'number';
+                                            
+                                            if (hasConcentration) {
+                                                // Show concentration with color gradient
+                                                const color = getColorForValue(detection.concentration);
+                                                return `<td class="heatmap-cell heatmap-value" style="background-color: ${color}">${detection.concentration.toFixed(2)}</td>`;
+                                            } else {
+                                                // Show max peak area from matches with color gradient
+                                                const peakAreas = detection.matches
+                                                    .map(m => m.peak_area)
+                                                    .filter(pa => pa !== null && pa !== undefined && typeof pa === 'number');
+                                                
+                                                if (peakAreas.length > 0) {
+                                                    const maxPeakArea = Math.max(...peakAreas);
+                                                    const color = getColorForValue(maxPeakArea);
+                                                    return `<td class="heatmap-cell heatmap-value" style="background-color: ${color}">${maxPeakArea.toFixed(0)}</td>`;
+                                                } else {
+                                                    return `<td class="heatmap-cell heatmap-no-match">X</td>`;
+                                                }
+                                            }
+                                        } else {
+                                            return `<td class="heatmap-cell heatmap-not-detected"><i>Not screened yet</i></td>`;
+                                        }
+                                    }).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            container.innerHTML = heatmapHTML;
+            lucide.createIcons();
+        }
+
+        // Switch between table and heatmap view
+        function switchView(view) {
+            currentView = view;
+            
+            // Toggle containers
+            document.getElementById('tableViewContainer').classList.toggle('active', view === 'table');
+            document.getElementById('heatmapViewContainer').classList.toggle('active', view === 'heatmap');
+            
+            // Update button states
+            updateViewButtons();
+        }
+
+        // Update view button states
+        function updateViewButtons() {
+            document.getElementById('tableViewBtn').classList.toggle('active', currentView === 'table');
+            document.getElementById('heatmapViewBtn').classList.toggle('active', currentView === 'heatmap');
+        }
+
+        // Filter by sample
+        function filterBySample() {
+            const filterSelect = document.getElementById('sampleFilter');
+            const selectedValue = filterSelect.value;
+            
+            currentFilter = selectedValue || null;
+            
+            // Update URL parameter
+            if (currentFilter) {
+                const url = new URL(window.location);
+                url.searchParams.set('sample_id', currentFilter);
+                window.history.pushState({}, '', url);
+            } else {
+                const url = new URL(window.location);
+                url.searchParams.delete('sample_id');
+                window.history.pushState({}, '', url);
+            }
+            
+            loadDetections();
+        }
+
+        // Clear filter
+        function clearFilter() {
+            currentFilter = null;
+            document.getElementById('sampleFilter').value = '';
+            
+            // Clear URL parameter
+            const url = new URL(window.location);
+            url.searchParams.delete('sample_id');
+            window.history.pushState({}, '', url);
+            
+            loadDetections();
+        }
+
+        // Toggle matches visibility
+        function toggleMatches(index) {
+            const matchesRow = document.getElementById(`matches-${index}`);
+            const expandBtn = document.querySelector(`button[data-row="${index}"]`);
+            
+            if (matchesRow.style.display === 'none') {
+                matchesRow.style.display = 'table-row';
+                expandBtn.textContent = '▼';
+                expandBtn.classList.add('expanded');
+            } else {
+                matchesRow.style.display = 'none';
+                expandBtn.textContent = '▶';
+                expandBtn.classList.remove('expanded');
+            }
+        }
+
+        // Clear detections (delete from database)
+        async function clearDetections() {
+            if (allDetections.length === 0) {
+                alert('No detections to clear.');
+                return;
+            }
+
+            const filterInfo = currentFilter 
+                ? `the filtered sample (${allDetections.length} detections)` 
+                : `ALL ${allDetections.length} detections`;
+            
+            if (!confirm(`Are you sure you want to delete ${filterInfo}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                // Get sample IDs to delete
+                const sampleIds = currentFilter 
+                    ? [currentFilter]
+                    : [...new Set(allDetections.map(d => d.sample_id))];
+
+                const response = await fetch('/api/detections/clear', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ sample_ids: sampleIds })
+                });
+
+                const data = await response.json();
+                console.log(data);
+                if (data.success) {
+                    alert(`Successfully deleted ${data.deleted_count} detection(s).`);
+                    await loadDetections();
+                } else {
+                    throw new Error(data.error || 'Failed to clear detections');
+                }
+            } catch (error) {
+                console.error('Error clearing detections:', error);
+                alert(`Error clearing detections: ${error.message}`);
+            }
+        }
+
+        // Initialize
+        initializePage();
+    </script>
+</body>
+</html>
