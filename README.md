@@ -5,11 +5,7 @@ Digital Sample Freezing Platform - Complete containerized solution for chemical 
 ## 📋 Quick Start
 
 ### 1. **Configure Ports (Optional)**
-<<<<<<< HEAD
 All service ports can be customized in an `.env` file:
-=======
-All service ports can be customized in the `.env` file:
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
 
 ```bash
 # Default ports - modify as needed
