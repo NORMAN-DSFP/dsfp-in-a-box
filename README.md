@@ -14,16 +14,9 @@ All service ports can be customized in the `.env` file:
 ```bash
 # Default ports - modify as needed
 ELASTICSEARCH_PORT=9200      # Database
-<<<<<<< HEAD
 STATUS_DASHBOARD_PORT=9000   # Dashboard
 SEMIQUANTIFICATION_PORT=8001     # Semiquantification service
 SPECTRAL_SIMILARITY_PORT=8002    # Spectral similarity score service
-=======
-DSFP_SERVER_PORT=3333       # API Server  
-STATUS_DASHBOARD_PORT=9000   # Dashboard
-SEMIQUANTIFICATION_PORT=8001     # ML Model 1
-SPECTRAL_SIMILARITY_PORT=8002    # ML Model 2
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
 ```
 
 ### 2. **Start All Services**
@@ -54,25 +47,14 @@ Open your browser to: `http://localhost:9000` (or your configured `STATUS_DASHBO
 | Service | Purpose | Default Port | Configuration |
 |---------|---------|-------------|---------------|
 | **Status Dashboard** | System management and monitoring | 9000 | `STATUS_DASHBOARD_PORT` |
-<<<<<<< HEAD
 | **Elasticsearch** | Data storage and search | 9200 | `ELASTICSEARCH_PORT` |
 | **Semiquantification** | Function for semiquantification | 8001 | `SEMIQUANTIFICATION_PORT` |
 | **Spectral Similarity** | Scoring function for spectral analysis | 8002 | `SPECTRAL_SIMILARITY_PORT` |
-=======
-| **DSFP Server** | Main API for data processing | 3333 | `DSFP_SERVER_PORT` |
-| **Elasticsearch** | Data storage and search | 9200 | `ELASTICSEARCH_PORT` |
-| **Semiquantification** | ML model for quantification | 8001 | `SEMIQUANTIFICATION_PORT` |
-| **Spectral Similarity** | ML model for spectral analysis | 8002 | `SPECTRAL_SIMILARITY_PORT` |
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
 | **Data Loader** | Background data processing | N/A | (Internal only) |
 
 ### Data Flow
 ```
-<<<<<<< HEAD
-Data Loader → Screening index → Screening → Results
-=======
-Upload Data → Data Loader → Elasticsearch → DSFP Server → Analysis Models → Results
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
+Data Loader → Screening index → Screening → Resultsd7a9fdad1cc
 ```
 
 ## 📊 Usage
@@ -100,10 +82,6 @@ dsfp-in-a-box/
 ├── .env                    # Port and environment configuration
 ├── docker-compose.yml     # Service orchestration
 ├── data/                  # Extracted data files
-<<<<<<< HEAD
-=======
-├── dsfp-server/          # Main API server
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
 ├── status-dashboard/     # Management interface
 ├── data-loader/          # Data processing service
 ├── models/               # Machine learning models
@@ -114,11 +92,6 @@ dsfp-in-a-box/
 
 ### Environment Files
 - **`.env`** - Main configuration (ports, URLs, credentials)
-<<<<<<< HEAD
-=======
-- **`.env.example`** - Template for new installations
-- **`.env.ports.template`** - Port configuration examples
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
 
 ### Custom Configurations
 ```bash
@@ -172,12 +145,7 @@ docker compose logs status-dashboard
 - 🆘 Full reset: `docker compose down && docker compose up -d`
 
 ## 📝 License
-
-<<<<<<< HEAD
 This project is part of the NORMAN Database System.
-=======
-This project is part of the Digital Sample Freezing Platform initiative.
->>>>>>> 8c86128517b155af26c03b30778a8d7a9fdad1cc
 
 ---
 
