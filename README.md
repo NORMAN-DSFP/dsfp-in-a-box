@@ -1,4 +1,4 @@
-# DSFP in a Box 🚀
+# DSFP in a Box
 
 Digital Sample Freezing Platform - Complete containerized solution for chemical data analysis and processing.
 
