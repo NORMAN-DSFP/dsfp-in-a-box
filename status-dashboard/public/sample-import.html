@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Import - DSFP Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="dsfp-auth.js"></script>
+    <script>
+        // Close owner dropdown when clicking elsewhere.
+        document.addEventListener('click', e => {
+            const wrap = document.querySelector('.owner-search-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                const dd = document.getElementById('ownerDropdown');
+                if (dd) { dd.innerHTML = ''; dd.style.display = 'none'; }
+            }
+        });
+    </script>
+    <style>
+        /* =====================================================================
+         * Full-viewport IDE-like layout for the Sample Import page:
+         *   shared header + top bar (matrix/fields) + main split (Files 30% /
+         *   Samples 70%) + sticky bottom bar (upload).
+         * ===================================================================== */
+        html, body { height: 100%; }
+        body { display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
+        #shared-header { flex: 0 0 auto; }
+        .import-page {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 0.8rem;
+            min-height: 0;
+            background: #f5f7fa;
+        }
+        .import-page .card { margin-bottom: 0; }
+        .import-page .section-header { padding: 0.55rem 1rem; }
+        .import-page .section-header h2 { font-size: 1rem; }
+        .import-page .section-content { padding: 0.9rem 1rem; }
+
+        /* ---- Top bar (Matrix & fields + schema controls) ----------------- */
+        .topbar { flex: 0 0 auto; }
+        .topbar .section-content {
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 1rem; padding: 0.7rem 1rem;
+        }
+        .topbar .matrix-controls {
+            display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.7rem;
+        }
+        .field-group label {
+            display: block; font-size: 0.72rem; font-weight: 600;
+            color: #2c3e50; margin-bottom: 0.22rem; text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .field-group select, .field-group input {
+            padding: 0.4rem 0.55rem; border: 1px solid #dfe6ec; border-radius: 4px;
+            font-family: 'Rubik', sans-serif; font-size: 0.88rem; background: white;
+            min-width: 220px;
+        }
+        .topbar .topbar-actions {
+            display: flex; flex-wrap: wrap; gap: 0.5rem;
+            margin-left: auto; align-items: center;
+        }
+        .topbar .schema-status { font-size: 0.82rem; color: #5a6b78; }
+        .topbar .schema-error {
+            flex-basis: 100%;
+            background: #fadbd8; border-left: 4px solid #e74c3c;
+            padding: 0.45rem 0.75rem; border-radius: 4px; color: #922b21;
+            font-size: 0.82rem; display: none;
+        }
+        .topbar .schema-error.visible { display: block; }
+        .btn-default {
+            background: var(--tblr-bg-surface-secondary, #e9ecef);
+            color: var(--tblr-body-color, #2c3e50);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+        }
+        .btn-default:hover {
+            background: var(--tblr-bg-surface, #fff);
+        }
+
+        /* ---- Collapsible field-picker panel ------------------------------ */
+        .field-picker-card { display: none; flex: 0 0 auto; }
+        .field-picker-card.open { display: block; }
+        .field-picker-groups {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 0.8rem;
+        }
+        .field-picker-group h4 {
+            font-size: 0.78rem; color: #094d77;
+            margin-bottom: 0.35rem; text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .field-picker label {
+            display: flex; align-items: center; gap: 0.4rem;
+            font-size: 0.82rem; padding: 0.1rem 0; cursor: pointer;
+        }
+
+        /* ---- Main split: Files (30%) / Samples (70%) --------------------- */
+        .import-main {
+            flex: 1 1 auto;
+            display: grid;
+            grid-template-columns: minmax(300px, 30%) 1fr;
+            gap: 0.8rem;
+            min-height: 0;
+        }
+        .import-main > .card {
+            display: flex; flex-direction: column;
+            min-height: 0; overflow: hidden;
+        }
+        .import-main > .card > .section-content {
+            flex: 1 1 auto; overflow: auto; min-height: 0;
+        }
+        .section-header > div { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+        .section-header .btn { padding: 0.32rem 0.65rem; font-size: 0.82rem; }
+
+        /* ---- Spreadsheet ------------------------------------------------- */
+        .sheet-wrapper {
+            border: 1px solid var(--tblr-border-color, #dfe6ec); border-radius: var(--tblr-border-radius, 0.5rem);
+            overflow-x: hidden;   /* horizontal scrolling happens via .sheet-scroll-top */
+            overflow-y: auto;
+        }
+        .sheet-scroll-top {
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            border-bottom: none;
+            border-top-left-radius: var(--tblr-border-radius, 0.5rem);
+            border-top-right-radius: var(--tblr-border-radius, 0.5rem);
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 14px;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
+        }
+        .sheet-scroll-top > div { height: 1px; }
+        .sheet-wrapper.with-top-scroll {
+            border-top: none;
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+        }
+        table.sheet { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+        table.sheet th, table.sheet td {
+            border: 1px solid var(--tblr-border-color, #e3e9ee); padding: 0; min-width: 130px;
+        }
+        table.sheet thead th {
+            position: sticky; top: 0; background: var(--tblr-primary, #094d77); color: var(--tblr-white, #fff);
+            z-index: 2; text-align: left; padding: 0.45rem 0.6rem; vertical-align: top;
+        }
+        table.sheet thead th .col-label { font-weight: 600; display:block; }
+        table.sheet thead th .col-machine {
+            font-weight: 400; font-size: 0.72rem; opacity: 0.75;
+            font-family: 'Courier New', monospace; display:block;
+        }
+        table.sheet thead th.req .col-label::after { content: ' *'; color: #ffd166; }
+        table.sheet th.row-head, table.sheet td.row-head {
+            position: sticky; left: 0; background: var(--tblr-bg-surface-secondary, #f1f5f8);
+            min-width: 46px; max-width: 46px; text-align: center;
+            z-index: 1; color: #7f8c8d; font-weight: 600;
+        }
+        table.sheet thead th.row-head { z-index: 3; background:var(--tblr-primary-dark, #073a5a); color:var(--tblr-white, #fff); }
+        table.sheet td.status-col, table.sheet th.status-col {
+            min-width: 180px; position: sticky; right: 0;
+            background: var(--tblr-card-bg, #fff); z-index: 1;
+        }
+        table.sheet thead th.status-col { z-index: 3; background:var(--tblr-primary, #094d77); }
+        table.sheet td[contenteditable] {
+            padding: 0.4rem 0.6rem; outline: none; white-space: nowrap;
+        }
+        table.sheet td[contenteditable]:focus {
+            box-shadow: inset 0 0 0 2px var(--tblr-primary, #3498db); background: #eaf4fc;
+        }
+        table.sheet tr:nth-child(even) td { background: var(--tblr-bg-surface-secondary, #fbfcfd); }
+        table.sheet td.has-files { background: #eafaf1 !important; }
+        table.sheet td.invalid {
+            background: #fdecea !important;
+            box-shadow: inset 0 0 0 2px var(--tblr-red, #e74c3c);
+        }
+        table.sheet td.invalid:focus {
+            box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--tblr-red, #c0392b) 88%, black);
+            background: #fbe1de !important;
+        }
+        table.sheet td.cell-select, table.sheet td.cell-check {
+            padding: 0.2rem 0.4rem;
+        }
+        table.sheet td.cell-select select {
+            width: 100%; border: none; background: transparent;
+            font-family: inherit; font-size: 0.85rem;
+            padding: 0.3rem 0.2rem; outline: none;
+        }
+        table.sheet td.cell-select select[multiple] {
+            min-height: 80px;
+        }
+        table.sheet td.cell-check { text-align: center; }
+        table.sheet td.cell-tax { padding: 0; }
+        table.sheet td.cell-tax input {
+            width: 100%; border: none; background: transparent;
+            font-family: inherit; font-size: 0.85rem;
+            padding: 0.4rem 0.6rem; outline: none;
+        }
+        table.sheet td.cell-tax input:focus {
+            box-shadow: inset 0 0 0 2px var(--tblr-primary, #3498db); background: #eaf4fc;
+        }
+        table.sheet td.sheet-empty {
+            padding: 2rem; text-align: center; color: #5a6b78;
+            background: var(--tblr-bg-surface-secondary, #fbfcfd); font-size: 0.9rem; border: 1px dashed var(--tblr-border-color, #cfd8df);
+        }
+        table.sheet thead th .col-rules {
+            font-weight: 400; font-size: 0.7rem; opacity: 0.85;
+            display: block; margin-top: 0.15rem;
+            font-style: italic;
+        }
+        .cell-status { display:flex; align-items:center; gap:0.4rem; padding:0.3rem 0.6rem; }
+        .sheet-help { font-size: 0.78rem; color: var(--tblr-secondary-color, #7f8c8d); margin-bottom: 0.5rem; }
+
+        /* ---- File drop zone --------------------------------------------- */
+        .dropzone {
+            border: 2px dashed var(--tblr-primary, #95c4e0); border-radius: var(--tblr-border-radius-lg, 0.75rem); padding: 1.1rem;
+            text-align: center; color: var(--tblr-secondary-color, #5a7a8c); background: var(--tblr-bg-surface-secondary, #f5fafe);
+            transition: all 0.15s; cursor: pointer;
+        }
+        .dropzone p { margin-top: 0.35rem; font-size: 0.85rem; }
+        .dropzone.dragover {
+            border-color: var(--tblr-primary, #3498db); background: #e7f3fb; color: var(--tblr-primary, #094d77);
+        }
+        .file-table { width: 100%; border-collapse: collapse; margin-top: 0.7rem; font-size: 0.82rem; background: var(--tblr-card-bg, #fff); border: 1px solid var(--tblr-border-color, #dfe6ec); border-radius: var(--tblr-border-radius, 0.5rem); overflow: hidden; }
+        .file-table th, .file-table td {
+            padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--tblr-border-color, #ecf0f1);
+            text-align: left; vertical-align: middle;
+        }
+        .file-table th { background:var(--tblr-bg-surface-secondary, #f8f9fa); color:var(--tblr-body-color, #2c3e50); font-size: 0.74rem; }
+        .file-table select {
+            padding: 0.25rem; border: 1px solid #dfe6ec; border-radius: 4px;
+            font-family: inherit; font-size: 0.78rem; max-width: 100%;
+            min-width: 0;
+        }
+        .file-name {
+            font-family: 'Courier New', monospace; word-break: break-all;
+            display: inline-block;
+        }
+        .matched { color:#27ae60; font-weight:600; }
+        .unmatched { color:#e67e22; }
+        .status-badge {
+            padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.7rem;
+            font-weight: 600; text-transform: uppercase;
+        }
+        .s-pending { background:#e9ecef; color:#6c757d; }
+        .s-uploading { background:#fff3cd; color:#f39c12; }
+        .s-success { background:#d5f4e6; color:#27ae60; }
+        .s-failed { background:#fadbd8; color:#e74c3c; }
+
+        /* ---- Bottom bar (upload) ---------------------------------------- */
+        .bottombar {
+            flex: 0 0 auto;
+            background: var(--tblr-card-bg, white);
+            border-top: 1px solid var(--tblr-border-color, #dfe6ec);
+            box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
+            padding: 0.65rem 1.2rem;
+            display: flex; align-items: center; gap: 1rem;
+            margin: 0 -1rem -1rem;
+        }
+        .bottombar .progress-block { flex: 1 1 auto; min-width: 0; }
+        .bottombar .progress-bar {
+            width: 100%; height: 8px; background:#ecf0f1;
+            border-radius: 4px; overflow: hidden;
+        }
+        .bottombar .progress-fill {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #27ae60, #2ecc71);
+            transition: width .3s; border-radius: 4px;
+        }
+        .bottombar .progress-text { font-size: 0.8rem; color: var(--tblr-secondary-color, #5a6b78); margin-top: 0.25rem; }
+        .bottombar .upload-btn { white-space: nowrap; }
+        .muted { color:#7f8c8d; font-size:0.85rem; }
+
+        /* ---- Owner override (admin only) ---------------------------------- */
+        .owner-panel {
+            display: none;
+            align-items: center; gap: 0.5rem;
+            flex: 0 0 auto; position: relative;
+            border-left: 1px solid #dfe6ec; padding-left: 1rem;
+        }
+        .owner-panel label { font-size:0.8rem; color:#5a6b78; white-space:nowrap; font-weight:600; }
+        .owner-search-wrap { position:relative; }
+        .owner-search-wrap input {
+            font-size:0.8rem; padding:0.3rem 0.55rem;
+            border:1px solid #ced4da; border-radius:4px; width:160px;
+        }
+        .owner-dropdown {
+            display:none; position:absolute; bottom:calc(100% + 4px); left:0;
+            min-width:220px; background:#fff;
+            border:1px solid #ced4da; border-radius:4px;
+            box-shadow:0 4px 12px rgba(0,0,0,.12);
+            z-index:200; max-height:240px; overflow-y:auto;
+        }
+        .owner-option {
+            padding:0.4rem 0.7rem; cursor:pointer; font-size:0.82rem;
+        }
+        .owner-option:hover { background:#f0f4ff; }
+        .owner-option.owner-none { color:#888; cursor:default; }
+        .owner-uid { color:#888; font-size:0.75rem; }
+        .owner-display {
+            font-size:0.8rem; color:#27ae60; font-weight:600;
+            max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        }
+        .owner-clear {
+            font-size:0.75rem; color:#e74c3c; cursor:pointer;
+            background:none; border:none; padding:0 2px;
+        }
+
+        /* ---- Responsive --------------------------------------------------- */
+        @media (max-width: 900px) {
+            .import-main { grid-template-columns: 1fr; }
+            body { overflow: auto; }
+        }
+    </style>
+    <script>
+        fetch('/header')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('shared-header').innerHTML = html;
+                lucide.createIcons();
+            });
+    </script>
+</head>
+<body>
+    <div id="shared-header"></div>
+
+    <div class="import-page">
+
+        <!-- TOP BAR: matrix + schema status ------------------------------- -->
+        <div class="card topbar">
+            <div class="section-content">
+                <div class="matrix-controls">
+                    <div class="field-group">
+                        <label for="matrixSelect">Matrix</label>
+                        <select id="matrixSelect" onchange="onMatrixChange()" disabled>
+                            <option value="">— Sign in to load matrices —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <span class="schema-status" id="schemaStatus">Sign in to DSFP to load the live webform schema.</span>
+                </div>
+                <div class="schema-error" id="connError"></div>
+            </div>
+        </div>
+
+        <!-- MAIN SPLIT: Files (30%) / Samples (70%) ------------------------ -->
+        <div class="import-main">
+
+            <div class="card">
+                <div class="section-header">
+                    <h2><i data-lucide="files" class="icon-md"></i> Files</h2>
+                    <div>
+                        <button class="btn" onclick="autoMatchFiles()" title="Auto-match files to samples"><i data-lucide="wand-2" class="icon-sm"></i></button>
+                        <button class="btn btn-danger" onclick="clearFiles()" title="Clear all files"><i data-lucide="trash-2" class="icon-sm"></i></button>
+                    </div>
+                </div>
+                <div class="section-content">
+                    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+                        <i data-lucide="upload-cloud" style="width:28px;height:28px;"></i>
+                        <p><strong>Drop files here</strong> or click to browse</p>
+                        <p class="muted" style="font-size:0.78rem; margin-top:0.2rem;">
+                            Full-scan, DDA, DIA &amp; per-collision-channel files.
+                        </p>
+                        <input type="file" id="fileInput" multiple style="display:none;" onchange="onFilesSelected(event)">
+                    </div>
+                    <p class="muted" style="margin-top:0.6rem; font-size:0.78rem;">
+                        Files are matched to samples by file name vs
+                        <code>short_name_for_contribution</code>.
+                    </p>
+                    <div id="fileListContainer"></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="section-header">
+                    <h2><i data-lucide="table" class="icon-md"></i> Samples</h2>
+                    <div>
+                        <button class="btn btn-success" onclick="addRows(1)"><i data-lucide="plus" class="icon-sm"></i> Add row</button>
+                        <button class="btn" onclick="addRows(10)"><i data-lucide="plus-square" class="icon-sm"></i> +10</button>
+                        <button class="btn btn-danger" onclick="clearSheet()"><i data-lucide="eraser" class="icon-sm"></i> Clear</button>
+                    </div>
+                </div>
+                <div class="section-content">
+                    <p class="sheet-help">
+                        <i data-lucide="clipboard" class="icon-sm"></i>
+                        Paste directly from Excel (Ctrl+V) &mdash; rows and columns are filled
+                        automatically. Column headers show the human-friendly label with the
+                        machine field name below.
+                    </p>
+                    <div class="sheet-scroll-top" id="sheetScrollTop"><div id="sheetScrollSpacer"></div></div>
+                    <div class="sheet-wrapper with-top-scroll" id="sheetWrapper">
+                        <table class="sheet" id="sheet">
+                            <thead><tr id="sheetHead"></tr></thead>
+                            <tbody id="sheetBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- BOTTOM BAR: upload --------------------------------------------- -->
+        <div class="bottombar">
+            <!-- Admin-only: owner override -->
+            <div class="owner-panel" id="ownerOverridePanel">
+                <label>Submit as:</label>
+                <div class="owner-search-wrap">
+                    <input type="text" id="ownerSearch" placeholder="Search user…"
+                           oninput="searchOwnerUsers()" autocomplete="off">
+                    <div class="owner-dropdown" id="ownerDropdown"></div>
+                </div>
+                <span class="owner-display" id="ownerDisplay"></span>
+                <button class="owner-clear" title="Clear owner override" onclick="clearOwnerUser()">✕</button>
+            </div>
+            <div class="progress-block">
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-text" id="progressText">No upload started.</div>
+            </div>
+            <button class="btn btn-success upload-btn" id="uploadBtn" onclick="uploadAll()">
+                <i data-lucide="cloud-upload" class="icon-sm"></i> Upload all samples
+            </button>
+        </div>
+    </div>
+
+    <script src="sample-import.js"></script>
+</body>
+</html>

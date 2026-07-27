@@ -1,13 +1,13 @@
 #* @post /semiquantification
 #* @param collection_id
 #* @param sample_id
-#* @param SMILES_suspect
-#* @param Area_suspect
-#* @param Preconcentration
-function(collection_id, sample_id, SMILES_suspect, Area_suspect, Preconcentration){
+#* @param smilessuspect
+#* @param peak_areas
+#* @param preconcentration
+#* @serializer json list(na="null", auto_unbox=FALSE)
+function(collection_id, sample_id, smilessuspect, peak_areas, preconcentration){
   library("readr")
   library("ChemmineR")
-  library("rjson")
   Sys.setenv(VROOM_CONNECTION_SIZE = 1000000)
   #collection_id <- 1 #dummy number
   #sample_id<-21537
@@ -15,7 +15,29 @@ function(collection_id, sample_id, SMILES_suspect, Area_suspect, Preconcentratio
   #Area_suspect <- 135020
   #Preconcentration <- 1
   
-  sample_id_link<-paste0("http://dsfp.norman-data.eu/data/", sample_id, "/spiked-compounds.csv")
+  sample_id_links<-paste0("https://dsfp.norman-data.eu/data/", sample_id, "/spiked-compounds.csv")
+  has_calibration_data<-vapply(sample_id_links, function(sample_id_link) {
+    lines<-tryCatch(readLines(sample_id_link, warn=FALSE), error=function(error) character())
+    length(lines)>1 && !any(grepl("No data available", lines, fixed=TRUE))
+  }, logical(1))
+
+  if(!all(has_calibration_data)){
+    return(list(
+      "semiqmethod"=rep(NA_character_, length(sample_id)),
+      "semiqconcentration"=rep(NA_real_, length(sample_id)),
+      "error"=paste0(
+        "No spiked-compound calibration data are available for collection ",
+        collection_id,
+        "/sample(s) ",
+        paste(sample_id[!has_calibration_data], collapse=", ")
+      )
+    ))
+  }
+
+  sample_id_link<-sample_id_links[[1]]
+  SMILES_suspect<-smilessuspect
+  Area_suspect<-peak_areas
+  Preconcentration<-preconcentration
   
   spiked_compounds <- read_delim(sample_id_link, "\t", escape_double = FALSE, skip = 1)
 
@@ -173,13 +195,12 @@ function(collection_id, sample_id, SMILES_suspect, Area_suspect, Preconcentratio
   }
   
   
-  obj_return<-data.frame("semiqmethod"=c("structural similarity"),
-                         "semiqconcentration"=xnew,
-                         "semiqbasedon"=similarity$cid[1],
-                         "semiqsimilarity"=similarity$scores[1])
-
-
-  return(toJSON(obj_return))
+  return(list(
+    "semiqmethod"=c("structural similarity"),
+    "semiqconcentration"=xnew,
+    "semiqbasedon"=similarity$cid[1],
+    "semiqsimilarity"=similarity$scores[1]
+  ))
   
 }
 

@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libgit2-dev \
     libsodium-dev \
+    libbz2-dev \
+    librsvg2-dev \
+    libuv1-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -27,9 +30,11 @@ RUN R -e "install.packages('plumber', repos='https://cloud.r-project.org')" && \
 # Install other required packages
 RUN R -e "install.packages(c('rjson', 'readr'), repos='https://cloud.r-project.org')"
 
-# Install BiocManager (skip chemistry packages for now to test plumber)
+# Install and verify the chemistry runtime dependency.
 RUN R -e "install.packages('BiocManager', repos='https://cloud.r-project.org')" && \
-    R -e "BiocManager::install('ChemmineR')"
+    R -e "BiocManager::install('ChemmineR', ask=FALSE, update=FALSE)"
+RUN R -e "options(timeout=600); urls <- c('https://bioconductor.statistik.tu-dortmund.de/packages/3.18/bioc/src/contrib/ChemmineR_3.54.0.tar.gz', 'https://ftp.gwdg.de/pub/misc/bioconductor/packages/3.18/bioc/src/contrib/ChemmineR_3.54.0.tar.gz'); archive <- tempfile(fileext='.tar.gz'); for (url in urls) { if (requireNamespace('ChemmineR', quietly=TRUE)) break; if (!inherits(try(download.file(url, archive, mode='wb')), 'try-error')) try(install.packages(archive, repos=NULL, type='source')) }; unlink(archive)"
+RUN R -e "stopifnot(requireNamespace('ChemmineR', quietly=TRUE))"
 
 # Expose the port Plumber will run on
 EXPOSE 8001

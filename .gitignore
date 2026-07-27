@@ -52,3 +52,6 @@ data/*.*
 temp-uploads/*
 
 .env
+test_data
+drupal
+data/*

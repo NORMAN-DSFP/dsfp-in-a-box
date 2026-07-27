@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Storage - DSFP Dashboard</title>
+    <title>Data - DSFP Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="dsfp-auth.js"></script>
+    <script src="sortable-table.js"></script>
     <style>
         /* Page-specific styles only - common styles are in styles.css */
         .file-input {
@@ -15,13 +17,14 @@
         .file-info {
             margin-top: 1rem;
             padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 4px;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
             display: none;
         }
 
         .file-info h3 {
-            color: #2c3e50;
+            color: var(--tblr-body-color, #2c3e50);
             margin-bottom: 0.5rem;
             font-size: 1rem;
         }
@@ -29,16 +32,16 @@
         .file-list {
             max-height: 200px;
             overflow-y: auto;
-            background: white;
-            border-radius: 4px;
+            background: var(--tblr-card-bg, #fff);
+            border-radius: var(--tblr-border-radius, 0.5rem);
             padding: 1rem;
-            border: 1px solid #ecf0f1;
+            border: 1px solid var(--tblr-border-color, #ecf0f1);
         }
 
         .file-item {
             padding: 0.5rem 0;
-            border-bottom: 1px solid #ecf0f1;
-            color: #2c3e50;
+            border-bottom: 1px solid var(--tblr-border-color, #ecf0f1);
+            color: var(--tblr-body-color, #2c3e50);
             font-size: 0.9rem;
         }
 
@@ -47,10 +50,133 @@
         }
 
         .status-info {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--tblr-card-bg, #fff);
+            border-radius: var(--tblr-border-radius-lg, 0.75rem);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            box-shadow: var(--tblr-box-shadow-sm, 0 2px 4px rgba(0,0,0,0.06));
             overflow: hidden;
+        }
+
+        .tab-shell {
+            margin-top: 2rem;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            padding: 0.45rem;
+            border-radius: var(--tblr-border-radius-lg, 0.75rem);
+            background: var(--tblr-bg-surface-secondary, #eef3f8);
+            border: 1px solid var(--tblr-border-color, #dbe5ee);
+            box-shadow: var(--tblr-box-shadow-sm, 0 2px 4px rgba(0,0,0,0.04));
+            width: 100%;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            appearance: none;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--tblr-secondary-color, #516173);
+            padding: 0.7rem 1rem;
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            cursor: pointer;
+            font-weight: 600;
+            width: 250px;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            background: var(--tblr-card-bg, #fff);
+            color: var(--tblr-body-color, #173b57);
+            border-color: var(--tblr-border-color, #dbe5ee);
+            transform: translateY(-1px);
+        }
+
+        .tab-btn.active {
+            background: var(--tblr-primary, #3498db);
+            color: var(--tblr-white, #fff);
+            border-color: var(--tblr-primary, #3498db);
+            box-shadow: var(--tblr-box-shadow, 0 8px 18px rgba(7, 97, 150, 0.18));
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        .tab-note {
+            margin-bottom: 1rem;
+            color: var(--tblr-secondary-color, #516173);
+            line-height: 1.5;
+        }
+
+        .storage-info-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .storage-info-popover {
+            position: absolute;
+            top: calc(100% + 0.65rem);
+            right: 0;
+            width: min(560px, calc(100vw - 2rem));
+            background: white;
+            color: #2c3e50;
+            border: 1px solid #dbe5ee;
+            border-radius: 14px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+            padding: 1rem;
+            z-index: 1000;
+            display: none;
+        }
+
+        .storage-info-popover.open {
+            display: block;
+        }
+
+        .storage-info-popover h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+            color: #173b57;
+        }
+
+        .storage-info-popover p {
+            margin: 0 0 0.75rem 0;
+            line-height: 1.55;
+            color: #34495e;
+        }
+
+        .storage-info-popover ul {
+            margin: 0.5rem 0 0 1.2rem;
+            padding: 0;
+        }
+
+        .storage-info-popover li {
+            margin: 0.4rem 0;
+            line-height: 1.45;
+        }
+
+        .storage-info-popover .path-box {
+            margin-top: 0.75rem;
+        }
+
+        .popover-backdrop {
+            position: fixed;
+            inset: 0;
+            background: transparent;
+            z-index: 20;
+            display: none;
+        }
+
+        .popover-backdrop.open {
+            display: block;
         }
 
         .location-details ul {
@@ -396,7 +522,7 @@
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            overflow: hidden;
+            overflow: visible;
         }
 
         .info-grid {
@@ -582,19 +708,99 @@
         }
         
         .action-btn {
-            background: #3498db;
-            color: white;
-            border: none;
+            background: var(--tblr-primary, #3498db);
+            color: var(--tblr-white, #fff);
+            border: 1px solid transparent;
             padding: 0.6rem 1.2rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             margin: 0.3rem 0.5rem 0.3rem 0;
             font-size: 0.9rem;
-            transition: background 0.2s;
+            font-weight: 500;
+            transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.15s ease;
+            box-shadow: var(--tblr-box-shadow-input, 0 1px 2px rgba(0,0,0,0.04));
         }
         
         .action-btn:hover {
-            background: #2980b9;
+            background: var(--tblr-primary-hover, #2980b9);
+            transform: translateY(-1px);
+        }
+
+        .collection-control-row {
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .collection-control-row .form-select {
+            min-width: 320px;
+        }
+
+        .batch-run-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .batch-run-controls .form-select {
+            min-width: 150px;
+        }
+
+        #batchRunBtn, #batchStopBtn {
+            min-width: 160px;
+        }
+
+        .btn-group.tabler-action-group {
+            display: inline-flex;
+            align-items: stretch;
+            width: 200px;
+            border: 1px solid var(--tblr-border-color, #dbe5ee);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            overflow: visible;
+            background: var(--tblr-card-bg, #fff);
+            box-shadow: var(--tblr-box-shadow-input, 0 1px 2px rgba(0,0,0,0.04));
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn-group.tabler-action-group .btn {
+            margin: 0;
+            border-radius: 0;
+            border: 0;
+        }
+
+        .btn-group.tabler-action-group .btn:first-child {
+            flex: 1 1 auto;
+            min-width: 0;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .btn-group.tabler-action-group > div {
+            flex: 0 0 2.35rem;
+            display: flex;
+            align-items: stretch;
+        }
+
+        .btn-group.tabler-action-group > div > .btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-group.tabler-action-group .btn + .btn {
+            border-left: 1px solid var(--tblr-border-color, #dbe5ee);
+        }
+
+        .btn-group.tabler-action-group .dropdown-menu {
+            min-width: 180px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            border-color: var(--tblr-border-color, #dbe5ee);
+        }
+
+        .btn-group.tabler-action-group .dropdown-item {
+            border-radius: calc(var(--tblr-border-radius, 0.5rem) - 2px);
         }
         
         .volume-info {
@@ -705,7 +911,7 @@
         }
     </style>
     <script>
-        fetch('header.html')
+        fetch('/header')
             .then(response => response.text())
             .then(html => {
                 document.getElementById('shared-header').innerHTML = html;
@@ -718,63 +924,43 @@
     <div id="shared-header"></div>
 
     <div class="container">
-        <div id="uploadSectionContainer">
-            <div class="card">
-                <div class="section-header">
-                    <h2><i data-lucide="package" class="icon-md"></i> Load ZIP File</h2>
-                    <span>Maximum file size: 5GB</span>
-                </div>
-                
-                <div class="section-content">
-                    
-                        <div class="system-info">
-                            <h4><i data-lucide="info" class="icon-sm"></i> Load your collection data</h4>
-                            <ol style="padding-left: 20px;">
-                                <li>Visit the DSFP online (<strong><a href="https://dsfp.norman-data.eu">https://dsfp.norman-data.eu</a></strong>).</li>
-                                <li>Proceed to <strong>login</strong> (<a href="https://dsfp.norman-data.eu/user/login">https://dsfp.norman-data.eu/user/login</a>).</li>
-                                <li>Access your <strong>collections screen</strong> (<a href="https://dsfp.norman-data.eu/user/collections">https://dsfp.norman-data.eu/user/collections</a>).</li>
-                                <li>Click to view the <strong>samples screen</strong> of your collection.</li>
-                                <li>Click on <strong>Download samples in JSON</strong> to get the ZIP file of your collection.</li>
-                            </ol>
-                        </div><br/>
-                    <div class="upload-area" id="uploadArea">
-                        <div class="upload-icon"><i data-lucide="package" class="icon-xl" style="width: 48px; height: 48px;"></i></div>
-                        <div class="upload-text">Drag and drop your ZIP file here</div>
-                        <div class="upload-subtext">or click to browse files (max 5GB)</div>
-                        <input type="file" id="fileInput" class="file-input" accept=".zip" />
-                    </div>
-
-                    <div class="progress-container" id="progressContainer">
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progressFill"></div>
-                        </div>
-                        <div class="progress-text" id="progressText">Loading...</div>
-                    </div>
-
-                    <div class="message error-message" id="errorMessage">
-                        <h4><i data-lucide="x-circle" class="icon-sm"></i> Loading Error</h4>
-                        <p id="errorText"></p>
-                    </div>
-
-                    <div class="message success-message" id="successMessage">
-                        <h4><i data-lucide="check-circle" class="icon-sm"></i> Loading Successful!</h4>
-                        <p id="successText"></p>
-                    </div>
-
-                    <div class="file-info" id="fileInfo">
-                        <h3><i data-lucide="clipboard" class="icon-sm"></i> Extracted Files</h3>
-                        <div class="file-list" id="fileList"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="card status-info">
             <div class="section-header">
                 <h2><i data-lucide="bar-chart-3" class="icon-md"></i> Storage Status</h2>
                 <div>
-                    <button class="btn btn-success" onclick="loadDataStatus()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
-                    <button class="btn" onclick="syncDataFiles()" id="syncBtn"><i data-lucide="database" class="icon-sm"></i> Prepare for screening</button>
+                    <button class="btn" onclick="loadDataStatus()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
+                    <button class="btn storage-info-btn" id="storageInfoBtn" type="button" aria-expanded="false">
+                            <i data-lucide="info" class="icon-sm"></i> Storage info
+                        </button>
+                                            <!-- <button class="btn btn-success" onclick="syncDataFiles()" id="syncBtn"><i data-lucide="database" class="icon-sm"></i> Prepare for screening</button> -->
+
+                    <div class="storage-info-wrap">
+                        
+                        <div class="storage-info-popover" id="storageInfoPopover" role="dialog" aria-label="Data Storage Location">
+                            <h3><i data-lucide="folder" class="icon-sm"></i> Data Storage Location</h3>
+                            <p><strong>Storage:</strong> Files uploaded through this Data Storage are stored locally in your project's <code>data</code> folder for easy access!</p>
+
+                            <div class="location-details">
+                                <h4><i data-lucide="target" class="icon-sm"></i> How to access and edit uploaded files:</h4>
+                                <ul>
+                                    <li><strong>Local folder:</strong> Open <code id="localFolderPath">Loading...</code> in File Explorer</li>
+                                    <li><strong>Browse file API:</strong> Use the <a href="/api/data/list" target="_blank"><i data-lucide="folder" class="icon-sm"></i> File API</a> to verify uploaded files</li>
+                                    <li><strong>Direct editing:</strong> Edit uploaded files directly with any text editor (VS Code, Notepad++, etc.)</li>
+                                    <li><strong>Download files:</strong> Access individual files at <code>/api/data/filename.json</code></li>
+                                    <li><strong>Add new files:</strong> Copy files directly to the data folder or upload via ZIP</li>
+                                </ul>
+                            </div>
+
+                            <div class="local-path-info">
+                                <h4><i data-lucide="folder-open" class="icon-sm"></i> Local File Path</h4>
+                                <div class="path-box">
+                                    <code id="dataPathDisplay">Loading...</code>
+                                    <button onclick="copyPath()" class="copy-btn" title="Copy path to clipboard"><i data-lucide="clipboard" class="icon-sm"></i></button>
+                                </div>
+                                <p><em>This folder contains files uploaded through the Data Storage. You can navigate to this folder in File Explorer to directly access and edit your uploaded files.</em></p>
+                            </div>
+                        </div>
+                    </div>
                     <!-- <button class="btn btn-danger" id="resetSyncBtn" onclick="resetAndSync()" style="margin-left: 0.5rem;"><i data-lucide="refresh-cw" class="icon-sm"></i> Reset & Re-sync</button> -->
                 </div>
             </div>
@@ -801,51 +987,115 @@
                 </div>
                 <div class="sync-details" id="syncDetails">Preparing to load files into the dsfp-screening-index...</div>
             </div>
-            
-            <div class="section-content">
-                <div class="info-box">
-                    <h3><i data-lucide="folder" class="icon-md"></i> Data Storage Location</h3>
-                    <p><strong>Storage:</strong> Files uploaded through this Data Storage are stored locally in your project's <code>data</code> folder for easy access!</p>
-                    
-                    <div class="location-details">
-                        <h4><i data-lucide="target" class="icon-sm"></i> How to access and edit uploaded files:</h4>
-                        <ul>
-                            <li><strong>Local folder:</strong> Open <code id="localFolderPath">Loading...</code> in File Explorer</li>
-                            <li><strong>Browse file API:</strong> Use the <a href="/api/data/list" target="_blank"><i data-lucide="folder" class="icon-sm"></i> File API</a> to verify uploaded files</li>
-                            <li><strong>Direct editing:</strong> Edit uploaded files directly with any text editor (VS Code, Notepad++, etc.)</li>
-                            <li><strong>Download files:</strong> Access individual files at <code>/api/data/filename.json</code></li>
-                            <li><strong>Add new files:</strong> Copy files directly to the data folder or upload via ZIP</li>
-                        </ul>
-                    </div>
-                    
-                    <div class="local-path-info">
-                        <h4><i data-lucide="folder-open" class="icon-sm"></i> Local File Path</h4>
-                        <div class="path-box">
-                            <code id="dataPathDisplay">Loading...</code>
-                            <button onclick="copyPath()" class="copy-btn" title="Copy path to clipboard"><i data-lucide="clipboard" class="icon-sm"></i></button>
+        </div>
+
+        <div class="tab-shell">
+            <div class="tab-bar" role="tablist" aria-label="Data loader tabs">
+                <button class="tab-btn active" id="dsfpDataTabBtn" type="button" role="tab" aria-selected="true" aria-controls="dsfpDataPanel">DSFP data</button>
+                <button class="tab-btn" id="localDataTabBtn" type="button" role="tab" aria-selected="false" aria-controls="localDataPanel">Local data</button>
+            </div>
+
+            <div class="tab-panel" id="localDataPanel" role="tabpanel" aria-labelledby="localDataTabBtn">
+                <div id="uploadSectionContainer">
+                    <div class="card">
+                        <div class="section-header">
+                            <h2><i data-lucide="package" class="icon-md"></i> Load ZIP File</h2>
+                            <span>Maximum file size: 5GB</span>
                         </div>
-                        <p><em>This folder contains files uploaded through the Data Storage. You can navigate to this folder in File Explorer to directly access and edit your uploaded files.</em></p>
+
+                        <div class="section-content">
+                            <div class="system-info">
+                                <h4><i data-lucide="info" class="icon-sm"></i> Load your collection data</h4>
+                                <ol style="padding-left: 20px;">
+                                    <li>Visit the DSFP online (<strong><a href="https://dsfp.norman-data.eu">https://dsfp.norman-data.eu</a></strong>).</li>
+                                    <li>Proceed to <strong>login</strong> (<a href="https://dsfp.norman-data.eu/user/login">https://dsfp.norman-data.eu/user/login</a>).</li>
+                                    <li>Access your <strong>collections screen</strong> (<a href="https://dsfp.norman-data.eu/user/collections">https://dsfp.norman-data.eu/user/collections</a>).</li>
+                                    <li>Click to view the <strong>samples screen</strong> of your collection.</li>
+                                    <li>Click on <strong>Download samples in JSON</strong> to get the ZIP file of your collection.</li>
+                                </ol>
+                            </div><br/>
+                            <div class="upload-area" id="uploadArea">
+                                <div class="upload-icon"><i data-lucide="package" class="icon-xl" style="width: 48px; height: 48px;"></i></div>
+                                <div class="upload-text">Drag and drop your ZIP file here</div>
+                                <div class="upload-subtext">or click to browse files (max 5GB)</div>
+                                <input type="file" id="fileInput" class="file-input" accept=".zip" />
+                            </div>
+
+                            <div class="progress-container" id="progressContainer">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progressFill"></div>
+                                </div>
+                                <div class="progress-text" id="progressText">Loading...</div>
+                            </div>
+
+                            <div class="message error-message" id="errorMessage">
+                                <h4><i data-lucide="x-circle" class="icon-sm"></i> Loading Error</h4>
+                                <p id="errorText"></p>
+                            </div>
+
+                            <div class="message success-message" id="successMessage">
+                                <h4><i data-lucide="check-circle" class="icon-sm"></i> Loading Successful!</h4>
+                                <p id="successText"></p>
+                            </div>
+
+                            <div class="file-info" id="fileInfo">
+                                <h3><i data-lucide="clipboard" class="icon-sm"></i> Extracted Files</h3>
+                                <div class="file-list" id="fileList"></div>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="volume-info">
-                        <h4><i data-lucide="bar-chart" class="icon-sm"></i> Prepare for screening</h4>
-                        <p>The <strong>"Prepare for screening"</strong> button processes all files in your data folder and loads them into a search index for screening.</p>
-                        <p>This process:</p>
-                        <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                            <li>Scans all <code>.json</code> files in the data folder</li>
-                            <li>Validates the file format and structure</li>
-                            <li>Loads valid files into the <code>dsfp-screening-index</code> Elasticsearch index</li>
-                            <li>Creates tracking records for file management</li>
-                            <li>Makes files available for screening analysis</li>
-                        </ul>
-                        <p>Use this button after uploading new files or when you want to refresh the screening index with the latest data.</p>
+                </div>
+            </div>
+
+            <div class="tab-panel active" id="dsfpDataPanel" role="tabpanel" aria-labelledby="dsfpDataTabBtn">
+                <div class="card">
+                    <div class="section-header">
+                        <h2><i data-lucide="layers-3" class="icon-md"></i> DSFP Data</h2>
+                        <span>Collections load automatically after sign-in</span>
                     </div>
-                    
-                    <!-- <div class="quick-actions">
-                        <h4>⚡ Quick Actions</h4>
-                        <button onclick="openDataFolder()" class="action-btn">📂 Open Data Folder</button>
-                        <button onclick="refreshDataList()" class="action-btn">🔄 Refresh File List</button>
-                    </div> -->
+                    <div class="section-content">
+                        <p class="tab-note">Pick one of your collections below, then view its sample records in a table similar to the sample import page.</p>
+
+                        <div class="file-info" id="collectionSamplesPanel" style="display:none; margin-top:1rem;">
+                            <h3><i data-lucide="layers" class="icon-sm"></i> View DSFP Collection Samples</h3>
+                            <div class="collection-control-row">
+                                <select id="collectionSelect" class="form-select">
+                                    <option value="">— Sign in to load your collections —</option>
+                                </select>
+                                <div id="batchRunControls" class="batch-run-controls" style="display:none;">
+                                    <span>Run</span>
+                                    <select id="batchOperationSelect" class="form-select">
+                                        <option value="parse">Process signal</option>
+                                        <option value="componentize">Componentize</option>
+                                        <option value="jsoncreate">Compile output</option>
+                                        <option value="prepare">Prepare for screening</option>
+                                    </select>
+                                    <span>on</span>
+                                    <select id="batchScopeSelect" class="form-select">
+                                        <option value="remaining">Remaining samples</option>
+                                        <option value="all">All samples</option>
+                                    </select>
+                                    <button id="batchRunBtn" class="btn btn-success">
+                                        <i data-lucide="play" class="icon-sm"></i>
+                                        Run
+                                    </button>
+                                    <button id="batchStopBtn" class="btn btn-danger" style="display:none;">
+                                        <i data-lucide="square" class="icon-sm"></i>
+                                        Stop
+                                    </button>
+                                </div>
+                                <button id="synchronizeBtn" class="btn btn-primary" style="display:none; margin-left:0.5rem;">
+                                    <i data-lucide="refresh-cw" class="icon-sm"></i>
+                                    Synchronize data
+                                </button>
+                            </div>
+                            <div id="samplesContainer" style="margin-top:1rem; display:none;">
+                                <div style="overflow:visible; max-height:none; border:1px solid var(--tblr-border-color, #ecf0f1); border-radius:var(--tblr-border-radius, 0.5rem); background:var(--tblr-card-bg, white); padding:0.5rem;">
+                                    <table id="samplesTable" data-sortable="true" style="width:100%; border-collapse:collapse; font-size:0.9rem;"></table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -866,6 +1116,29 @@
         const successText = document.getElementById('successText');
         const fileInfo = document.getElementById('fileInfo');
         const fileList = document.getElementById('fileList');
+        const storageInfoBtn = document.getElementById('storageInfoBtn');
+        const storageInfoPopover = document.getElementById('storageInfoPopover');
+        const popoverBackdrop = document.createElement('div');
+        popoverBackdrop.className = 'popover-backdrop';
+        document.body.appendChild(popoverBackdrop);
+
+        function setStorageInfoOpen(open) {
+            storageInfoPopover.classList.toggle('open', open);
+            popoverBackdrop.classList.toggle('open', open);
+            storageInfoBtn.setAttribute('aria-expanded', String(open));
+        }
+
+        storageInfoBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            setStorageInfoOpen(!storageInfoPopover.classList.contains('open'));
+        });
+
+        storageInfoPopover.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
+        popoverBackdrop.addEventListener('click', () => setStorageInfoOpen(false));
+        document.addEventListener('click', () => setStorageInfoOpen(false));
 
         // Hide messages initially
         function hideMessages() {
@@ -873,6 +1146,7 @@
             successMessage.style.display = 'none';
             fileInfo.style.display = 'none';
             progressContainer.style.display = 'none';
+            setStorageInfoOpen(false);
         }
 
         // Show error message
@@ -921,14 +1195,10 @@
                             document.getElementById('localFolderPath').textContent = dataPath;
                         }
                         
-                        // Reorder sections based on whether there's data
-                        reorderSections(fileCount > 0);
                     }
                 })
                 .catch(error => {
                     console.error('Error loading data status:', error);
-                    // Default to showing upload section first if we can't load data status
-                    reorderSections(false);
                 });
         }
 
@@ -939,21 +1209,6 @@
             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        // Reorder sections based on data availability
-        function reorderSections(hasData) {
-            const container = document.querySelector('.container');
-            const uploadSection = document.getElementById('uploadSectionContainer');
-            const statusSection = document.querySelector('.status-info');
-            
-            if (hasData) {
-                // If there's data, show status section first, upload section last
-                container.insertBefore(statusSection, uploadSection);
-            } else {
-                // If no data, show upload section first, status section last
-                container.insertBefore(uploadSection, statusSection);
-            }
         }
 
         // Handle file upload
@@ -1072,6 +1327,581 @@
         hideMessages();
         loadDataStatus();
         checkInitialSyncStatus();
+
+        // Tab wiring
+        const localDataTabBtn = document.getElementById('localDataTabBtn');
+        const dsfpDataTabBtn = document.getElementById('dsfpDataTabBtn');
+        const localDataPanel = document.getElementById('localDataPanel');
+        const dsfpDataPanel = document.getElementById('dsfpDataPanel');
+
+        function activateTab(tabName) {
+            const isLocal = tabName === 'local';
+            localDataTabBtn.classList.toggle('active', isLocal);
+            dsfpDataTabBtn.classList.toggle('active', !isLocal);
+            localDataTabBtn.setAttribute('aria-selected', String(isLocal));
+            dsfpDataTabBtn.setAttribute('aria-selected', String(!isLocal));
+            localDataPanel.classList.toggle('active', isLocal);
+            dsfpDataPanel.classList.toggle('active', !isLocal);
+        }
+
+        localDataTabBtn.addEventListener('click', () => activateTab('local'));
+        dsfpDataTabBtn.addEventListener('click', () => activateTab('dsfp'));
+
+        // Wire up collection -> samples UI
+        const collectionSelect = document.getElementById('collectionSelect');
+        const batchRunControls = document.getElementById('batchRunControls');
+        const batchOperationSelect = document.getElementById('batchOperationSelect');
+        const batchScopeSelect = document.getElementById('batchScopeSelect');
+        const batchRunBtn = document.getElementById('batchRunBtn');
+        const batchStopBtn = document.getElementById('batchStopBtn');
+        const synchronizeBtn = document.getElementById('synchronizeBtn');
+        const collectionSamplesPanel = document.getElementById('collectionSamplesPanel');
+        const samplesContainer = document.getElementById('samplesContainer');
+        const samplesTable = document.getElementById('samplesTable');
+        const urlParams = new URLSearchParams(window.location.search);
+        let pendingCollectionNid = (urlParams.get('collection') || '').trim();
+
+        // Set by loadCollectionSamples(); used by the batch run controls and
+        // by each row's action cell to know which collection a sample belongs to.
+        let currentCollectionNid = '';
+        let currentCollectionCanProcess = false;
+
+        // Tracks how many async processing/sync operations are currently in
+        // flight (individual row actions, batch runs, or synchronize), so we
+        // can warn the user before they navigate away mid-operation.
+        let activeOperationCount = 0;
+        function beginActiveOperation() { activeOperationCount++; }
+        function endActiveOperation() { activeOperationCount = Math.max(0, activeOperationCount - 1); }
+
+        window.addEventListener('beforeunload', (event) => {
+            if (activeOperationCount > 0) {
+                event.preventDefault();
+                event.returnValue = 'A process is still running. Leaving this page will stop it.';
+                return event.returnValue;
+            }
+        });
+
+        // Batch run cancellation flag, checked between samples in runBatchOperation.
+        let batchRunCancelled = false;
+
+        function setBatchRunning(isRunning) {
+            batchRunBtn.style.display = isRunning ? 'none' : '';
+            batchStopBtn.style.display = isRunning ? '' : 'none';
+            batchStopBtn.disabled = false;
+            batchStopBtn.innerHTML = '<i data-lucide="square" class="icon-sm"></i> Stop';
+            batchOperationSelect.disabled = isRunning;
+            batchScopeSelect.disabled = isRunning;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        collectionSelect.addEventListener('change', async () => {
+            const nid = (collectionSelect && collectionSelect.value) || '';
+            if (!nid) {
+                collectionSamplesPanel.style.display = 'none';
+                samplesContainer.style.display = 'none';
+                samplesTable.innerHTML = '';
+                batchRunCancelled = true;
+                setBatchRunning(false);
+                batchRunControls.style.display = 'none';
+                synchronizeBtn.style.display = 'none';
+                currentCollectionNid = '';
+                currentCollectionCanProcess = false;
+                return;
+            }
+
+            await loadCollectionSamples(nid);
+        });
+
+        // Falls back to the server's own default (5) if settings can't be fetched,
+        // or if this service has no configured concurrency (e.g. 'prepare').
+        async function fetchServiceConcurrency(service) {
+            try {
+                const resp = await fetch('/api/processing-settings');
+                const data = await resp.json();
+                const concurrency = data && data.success && data.settings && data.settings[service] && data.settings[service].concurrency;
+                if (concurrency) return concurrency;
+            } catch (e) {
+                // fall through to default
+            }
+            return 5;
+        }
+
+        async function runBatchOperation(service, scope) {
+            const rows = Array.from(samplesTable.querySelectorAll('[data-sample-id]'));
+            const concurrency = Math.max(1, await fetchServiceConcurrency(service));
+
+            // Run up to `concurrency` samples in parallel (matching the Dashboard's
+            // configured concurrency for this service) instead of one at a time.
+            let nextIndex = 0;
+            async function worker() {
+                while (!batchRunCancelled) {
+                    const index = nextIndex++;
+                    if (index >= rows.length) return;
+                    const row = rows[index];
+                    const sampleId = row.getAttribute('data-sample-id');
+                    if (scope === 'remaining') {
+                        try {
+                            const statusData = await fetchSampleProcessingStatus(sampleId);
+                            if (statusData.done && statusData.done[service]) continue;
+                        } catch (e) {
+                            // If we can't determine status, fall through and attempt the step anyway.
+                        }
+                    }
+                    if (batchRunCancelled) return;
+                    await invokeProcessingStep(sampleId, currentCollectionNid, service, row);
+                }
+            }
+
+            const workerCount = Math.min(concurrency, rows.length);
+            await Promise.all(Array.from({ length: workerCount }, () => worker()));
+        }
+
+        batchRunBtn.addEventListener('click', async () => {
+            const service = batchOperationSelect.value;
+            const scope = batchScopeSelect.value;
+            batchRunCancelled = false;
+            setBatchRunning(true);
+            beginActiveOperation();
+            try {
+                await runBatchOperation(service, scope);
+            } finally {
+                setBatchRunning(false);
+                endActiveOperation();
+            }
+        });
+
+        batchStopBtn.addEventListener('click', () => {
+            batchRunCancelled = true;
+            batchStopBtn.disabled = true;
+            batchStopBtn.innerHTML = '<i data-lucide="square" class="icon-sm"></i> Stopping…';
+            if (window.lucide) lucide.createIcons();
+        });
+
+        synchronizeBtn.addEventListener('click', async () => {
+            synchronizeBtn.disabled = true;
+            const originalHtml = synchronizeBtn.innerHTML;
+            beginActiveOperation();
+            try {
+                const rows = Array.from(samplesTable.querySelectorAll('[data-sample-id]'));
+                let done = 0;
+                for (const row of rows) {
+                    const sampleId = row.getAttribute('data-sample-id');
+                    done += 1;
+                    synchronizeBtn.innerHTML = `<i data-lucide="refresh-cw" class="icon-sm"></i> Synchronizing… (${done}/${rows.length})`;
+                    if (window.lucide) lucide.createIcons();
+                    try {
+                        const resp = await fetch('/api/dsfp/sample/' + encodeURIComponent(sampleId) + '/synchronize', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ collection_id: currentCollectionNid })
+                        });
+                        const data = await resp.json();
+                        if (data.success) {
+                            await refreshSampleStatusCell(sampleId, row.querySelector('.proc-status-cell'));
+                            await refreshSampleActionCell(sampleId, currentCollectionNid, row.querySelector('.proc-action-cell'));
+                        }
+                    } catch (e) {
+                        console.warn('Synchronize failed for sample', sampleId, e.message);
+                    }
+                }
+            } finally {
+                synchronizeBtn.innerHTML = originalHtml;
+                synchronizeBtn.disabled = false;
+                endActiveOperation();
+                if (window.lucide) lucide.createIcons();
+            }
+        });
+
+        // Auto-load collections on page load and when DSFP auth changes
+        async function autoLoadCollections() {
+            try {
+                if (window.DsfpAuth) {
+                    try {
+                        await DsfpAuth.ensureLogin();
+                    } catch (e) {
+                        // user cancelled login; still attempt unauthenticated fetch
+                    }
+                }
+            } catch (e) { /* ignore */ }
+            loadUserCollections();
+        }
+
+        // React to DSFP auth status changes
+        if (window.DsfpAuth && typeof DsfpAuth.on === 'function') {
+            DsfpAuth.on(status => { if (status && status.loggedIn) loadUserCollections(); });
+        }
+
+        // Kick off automatic load
+        setTimeout(autoLoadCollections, 200);
+
+        async function loadUserCollections() {
+            try {
+                let resp = await fetch('/api/dsfp/collections');
+
+                if (resp.status === 401) {
+                    // Try to prompt login and retry once
+                    if (window.DsfpAuth && typeof DsfpAuth.ensureLogin === 'function') {
+                        try {
+                            await DsfpAuth.ensureLogin();
+                            resp = await fetch('/api/dsfp/collections');
+                        } catch (e) {
+                            return; // user cancelled or login failed
+                        }
+                    } else {
+                        return;
+                    }
+                }
+
+                const data = await resp.json();
+                if (!data || !data.success) {
+                    console.warn('Could not load collections:', data && data.error);
+                    return;
+                }
+
+                const cols = data.collections || [];
+                collectionSelect.innerHTML = `<option value="">— Select a collection —</option>` +
+                    cols.map(c => `<option value="${c.nid}">${escapeHtml(c.title || c.uuid || c.nid)}</option>`).join('');
+                collectionSamplesPanel.style.display = 'block';
+                if (pendingCollectionNid && cols.some(c => String(c.nid) === String(pendingCollectionNid))) {
+                    collectionSelect.value = pendingCollectionNid;
+                    const nidToLoad = pendingCollectionNid;
+                    pendingCollectionNid = '';
+                    await loadCollectionSamples(nidToLoad);
+                }
+                if (window.lucide) lucide.createIcons();
+            } catch (e) {
+                console.warn('Error loading collections:', e && e.message);
+            }
+        }
+
+        async function loadCollectionSamples(nid) {
+            try {
+                samplesContainer.style.display = 'none';
+                samplesTable.innerHTML = '';
+                batchRunCancelled = true;
+                setBatchRunning(false);
+                batchRunControls.style.display = 'none';
+                synchronizeBtn.style.display = 'none';
+                currentCollectionNid = nid;
+                currentCollectionCanProcess = false;
+
+                const resp = await fetch('/api/dsfp/collection-samples?nid=' + encodeURIComponent(nid));
+                if (resp.status === 401) {
+                    if (window.DsfpAuth) { await DsfpAuth.openLogin(); return loadCollectionSamples(nid); }
+                    throw new Error('Not authorized');
+                }
+                const data = await resp.json();
+                if (!data.success) {
+                    alert('Could not fetch samples: ' + (data.error || 'Unknown'));
+                    return;
+                }
+
+                // Determine whether the current user manages this collection
+                // (owner or admin) before rendering per-row action buttons.
+                try {
+                    const permResp = await fetch('/api/dsfp/collection/' + encodeURIComponent(nid) + '/can-process');
+                    const permData = await permResp.json();
+                    currentCollectionCanProcess = !!(permData && permData.success && permData.canProcess);
+                } catch (e) {
+                    currentCollectionCanProcess = false;
+                }
+
+                const samples = data.samples || [];
+                
+                renderSamplesTable(samples);
+                samplesContainer.style.display = samples.length ? '' : 'none';
+                if (currentCollectionCanProcess && samples.length) {
+                    batchRunControls.style.display = '';
+                    synchronizeBtn.style.display = '';
+                }
+            } catch (e) {
+                console.error('Error loading collection samples:', e);
+                alert('Error loading collection samples: ' + e.message);
+            }
+        }
+
+        function getSampleField(sample, keys) {
+            for (const key of keys) {
+                const value = sample && sample[key];
+                if (value !== null && value !== undefined && String(value).trim() !== '') {
+                    return String(value);
+                }
+            }
+            return '';
+        }
+
+        function renderSamplesTable(samples) {
+            samplesTable.innerHTML = '';
+            if (!samples || !samples.length) {
+                samplesTable.innerHTML = '<tr><td style="padding:0.6rem" colspan="5">No samples found</td></tr>';
+                return;
+            }
+
+            const headerLabels = ['ID', 'Short name', 'Type', 'Processing', 'Status'];
+            const header = '<tr>' + headerLabels.map((label, index) => {
+                const extraStyle = index === 1 ? 'width: 180px; max-width: 180px;' : '';
+                return `<th style="text-align:left; padding:0.5rem; border-bottom:1px solid #eef3f7; ${extraStyle}">${escapeHtml(label)}</th>`;
+            }).join('') + '</tr>';
+            const rows = samples.map(sample => {
+                const sampleId = getSampleField(sample, ['sample_id', 'ID', 'Id', 'sampleId']);
+                const shortName = getSampleField(sample, ['short_name_for_contribution', 'Short name for contribution', 'short_name', 'Short name']);
+                const type = getSampleField(sample, ['type', 'sample_type', 'Sample type', 'Type']);
+
+                return `<tr data-sample-id="${escapeHtml(sampleId)}">` +
+                    `<td style="padding:0.45rem; border-bottom:1px solid #f6f9fb; border-left:4px solid transparent;">${escapeHtml(sampleId)}</td>` +
+                    `<td style="padding:0.45rem; border-bottom:1px solid #f6f9fb; width:180px; max-width:180px; white-space:normal; word-break:break-word; line-height:1.35;">${escapeHtml(shortName)}</td>` +
+                    `<td style="padding:0.45rem; border-bottom:1px solid #f6f9fb">${escapeHtml(type)}</td>` +
+                    `<td class="proc-action-cell" style="padding:0.45rem; border-bottom:1px solid #f6f9fb; white-space:nowrap; vertical-align:middle; position:relative; overflow:visible; z-index:1;">Loading…</td>` +
+                    `<td class="proc-status-cell" style="padding:0.45rem; border-bottom:1px solid #f6f9fb; white-space:nowrap; vertical-align:middle;"></td>` +
+                `</tr>`;
+            }).join('');
+
+            samplesTable.innerHTML = header + rows;
+
+            samplesTable.querySelectorAll('tr[data-sample-id]').forEach(row => {
+                const sampleId = row.getAttribute('data-sample-id');
+                if (!sampleId) return;
+                refreshSampleActionCell(sampleId, currentCollectionNid, row.querySelector('.proc-action-cell'));
+                refreshSampleStatusCell(sampleId, row.querySelector('.proc-status-cell'));
+            });
+        }
+
+        // ─── Sequential processing UI (parse → componentize → jsoncreate → prepare) ────
+
+        const PROCESSING_LABELS = { parse: 'Process signal', componentize: 'Componentize', jsoncreate: 'Compile output', prepare: 'Prepare for screening' };
+        const PROCESSING_ROW_COLORS = ['#e74c3c', '#f39c12', '#f1c40f', '#27ae60'];
+
+        function applySampleRowStatus(row, status) {
+            if (!row) return;
+            const color = PROCESSING_ROW_COLORS[Math.min(status, PROCESSING_ROW_COLORS.length - 1)];
+            const firstCell = row.querySelector('td');
+            if (firstCell) firstCell.style.borderLeft = `4px solid ${color}`;
+        }
+
+        async function fetchSampleProcessingStatus(sampleId) {
+            const resp = await fetch('/api/dsfp/sample/' + encodeURIComponent(sampleId) + '/processing-status');
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || 'Could not fetch processing status');
+            return data; // { status, done, nextService, downloadUrl }
+        }
+
+        function getRerunServices(nextService, done) {
+            if (nextService === 'componentize') return ['parse'];
+            if (nextService === 'jsoncreate') return ['parse', 'componentize'];
+            if (nextService === 'prepare') return ['parse', 'componentize', 'jsoncreate'];
+            if (!nextService && done) return ['parse', 'componentize', 'jsoncreate'];
+            return [];
+        }
+
+        function buildProcessingButtonGroup(sampleId, collectionId, statusData, row) {
+            const group = document.createElement('div');
+            group.className = 'btn-group tabler-action-group';
+
+            const primary = document.createElement('button');
+            primary.className = 'btn btn-primary';
+            primary.style.fontSize = '0.85rem';
+
+            const locked = !currentCollectionCanProcess;
+            const nextService = statusData.nextService;
+            const completed = !nextService;
+
+            if (completed) {
+                primary.textContent = 'Prepared';
+                primary.disabled = true;
+                primary.className = 'btn btn-secondary';
+                primary.style.cursor = 'default';
+            } else {
+                primary.textContent = PROCESSING_LABELS[nextService] || nextService;
+                primary.disabled = locked;
+                if (locked) {
+                    primary.title = 'Only the collection owner or an admin can run this';
+                }
+                primary.addEventListener('click', () => invokeProcessingStep(sampleId, collectionId, nextService, row));
+            }
+
+            applySampleRowStatus(row, statusData.status);
+
+            if (nextService === 'parse') {
+                group.appendChild(primary);
+                if (window.lucide) lucide.createIcons();
+                return group;
+            }
+
+            const rerunServices = getRerunServices(nextService, completed);
+            const menuWrap = document.createElement('div');
+            menuWrap.style.position = 'relative';
+
+            const toggle = document.createElement('button');
+            toggle.className = 'btn btn-primary';
+            toggle.style.padding = '0.35rem 0.55rem';
+            toggle.style.display = rerunServices.length ? 'inline-flex' : 'none';
+            toggle.innerHTML = '<i data-lucide="chevron-down" class="icon-sm"></i>';
+            toggle.title = locked ? 'Only the collection owner or an admin can rerun the pipeline' : 'Re-run previous steps';
+            toggle.disabled = locked;
+
+            const menu = document.createElement('div');
+            menu.style.position = 'fixed';
+            menu.style.minWidth = '180px';
+            menu.style.background = 'var(--tblr-card-bg, #fff)';
+            menu.style.border = '1px solid var(--tblr-border-color, #dbe5ee)';
+            menu.style.borderRadius = 'var(--tblr-border-radius, 0.5rem)';
+            menu.style.boxShadow = '0 12px 30px rgba(15, 23, 42, 0.15)';
+            menu.style.padding = '0.35rem';
+            menu.style.display = 'none';
+            menu.style.zIndex = '99999';
+            menu.style.maxWidth = 'calc(100vw - 16px)';
+            menu.style.transform = 'translateZ(0)';
+
+            if (!menu.parentElement) {
+                document.body.appendChild(menu);
+            }
+
+            const closeMenu = () => {
+                menu.style.display = 'none';
+                toggle.setAttribute('aria-expanded', 'false');
+            };
+            toggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const shouldOpen = menu.style.display === 'none';
+                if (shouldOpen) {
+                    const rect = toggle.getBoundingClientRect();
+                    const left = Math.max(8, rect.left);
+                    const top = rect.bottom + 6;
+                    menu.style.left = `${left}px`;
+                    menu.style.top = `${top}px`;
+                }
+                menu.style.display = shouldOpen ? 'block' : 'none';
+                toggle.setAttribute('aria-expanded', String(shouldOpen));
+                if (shouldOpen) {
+                    setTimeout(() => document.addEventListener('click', closeMenu, { once: true }), 0);
+                }
+            });
+
+            menu.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            rerunServices.forEach(service => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'dropdown-item';
+                item.style.display = 'block';
+                item.style.width = '100%';
+                item.style.textAlign = 'left';
+                item.style.background = 'transparent';
+                item.style.border = '0';
+                item.style.padding = '0.45rem 0.6rem';
+                item.style.borderRadius = '0.35rem';
+                item.style.cursor = 'pointer';
+                item.style.fontSize = '0.85rem';
+                item.textContent = `Re: ${PROCESSING_LABELS[service] || service}`;
+                item.disabled = locked;
+                item.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    closeMenu();
+                    if (!locked) invokeProcessingStep(sampleId, collectionId, service, row);
+                });
+                item.addEventListener('mouseenter', () => { item.style.background = 'var(--tblr-bg-surface-secondary, #f8fbfe)'; });
+                item.addEventListener('mouseleave', () => { item.style.background = 'transparent'; });
+                menu.appendChild(item);
+            });
+
+            menuWrap.appendChild(toggle);
+
+            group.appendChild(primary);
+            group.appendChild(menuWrap);
+            if (window.lucide) lucide.createIcons();
+            return group;
+        }
+
+        async function invokeProcessingStep(sampleId, collectionId, service, row) {
+            const processingCell = row ? row.querySelector('.proc-action-cell') : null;
+            if (processingCell) {
+                processingCell.innerHTML = service === 'prepare' ? '<span>Preparing… <i data-lucide="wrench" class="icon-sm"></i></span>' : '<span>Queuing… <i data-lucide="hourglass" class="icon-sm"></i></span>';
+            }
+            beginActiveOperation();
+            try {
+                if (service === 'prepare') {
+                    const resp = await fetch('/api/dsfp/sample/' + encodeURIComponent(sampleId) + '/prepare', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ collection_id: collectionId })
+                    });
+                    const data = await resp.json();
+                    if (!data.success) throw new Error(data.error || 'Could not prepare sample');
+                } else {
+                    const resp = await fetch('/api/jobs/enqueue', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ service, collection_id: collectionId, sample_id: sampleId })
+                    });
+                    const data = await resp.json();
+                    if (!data.success) throw new Error(data.error || 'Could not start job');
+                    if (processingCell) processingCell.innerHTML = '<span>Processing… <i data-lucide="wrench" class="icon-sm"></i></span>';
+                    await pollJobStatus(data.jobId);
+                }
+
+                if (processingCell) processingCell.innerHTML = '<span>Refreshing…</span>';
+                await refreshSampleActionCell(sampleId, collectionId, processingCell);
+                await refreshSampleStatusCell(sampleId, row ? row.querySelector('.proc-status-cell') : null);
+            } catch (e) {
+                if (processingCell) {
+                    processingCell.innerHTML = `<span style="color:#c0392b;">Failed: ${escapeHtml(e.message)}</span>`;
+                }
+            } finally {
+                endActiveOperation();
+            }
+        }
+
+        async function refreshSampleActionCell(sampleId, collectionId, cell) {
+            if (!cell) return;
+            try {
+                const statusData = await fetchSampleProcessingStatus(sampleId);
+                cell.innerHTML = '';
+                cell.appendChild(buildProcessingButtonGroup(sampleId, collectionId, statusData, cell.closest('tr')));
+            } catch (e) {
+                cell.innerHTML = `<span style="color:#c0392b;">Status unavailable</span>`;
+            }
+        }
+
+        const PIPELINE_STATUS_LABELS = ['Not started', 'Peaks picked', 'Adduct, isotopes grouped', 'Output compiled in JSON', 'Indexed for screening'];
+
+        async function refreshSampleStatusCell(sampleId, cell) {
+            if (!cell) return;
+            cell.textContent = 'Loading…';
+            try {
+                const statusData = await fetchSampleProcessingStatus(sampleId);
+                cell.textContent = PIPELINE_STATUS_LABELS[statusData.status] || 'Unknown';
+            } catch (e) {
+                cell.textContent = 'Unknown';
+            }
+        }
+
+        function pollJobStatus(jobId) {
+            const maxAttempts = 240; // 240 x 5s = 20 minutes
+            return new Promise((resolve, reject) => {
+                let attempts = 0;
+                function poll() {
+                    attempts++;
+                    fetch('/api/jobs/' + encodeURIComponent(jobId) + '/status')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (!data.success) { reject(new Error(data.error || 'Job status unavailable')); return; }
+                            if (data.state === 'completed') { resolve(); return; }
+                            if (data.state === 'failed') { reject(new Error(data.error || 'Job failed')); return; }
+                            if (attempts >= maxAttempts) { reject(new Error('Timed out waiting for job to finish')); return; }
+                            setTimeout(poll, 5000);
+                        })
+                        .catch(err => {
+                            if (attempts >= maxAttempts) { reject(err); return; }
+                            setTimeout(poll, 5000);
+                        });
+                }
+                poll();
+            });
+        }
+
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
         // Copy path to clipboard
         function copyPath() {

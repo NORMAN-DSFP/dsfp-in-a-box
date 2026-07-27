@@ -6,6 +6,7 @@
     <title>DSFP in a box</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="dsfp-auth.js"></script>
     <style>
         .stats-grid {
             display: grid;
@@ -15,10 +16,11 @@
         }
         
         .stat-card {
-            background: white;
+            background: var(--tblr-card-bg, #fff);
             padding: 1.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: var(--tblr-border-radius-lg, 0.75rem);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            box-shadow: var(--tblr-box-shadow-sm, 0 2px 4px rgba(0,0,0,0.06));
             text-align: center;
             transition: transform 0.2s, box-shadow 0.2s;
         }
@@ -31,7 +33,7 @@
         .stat-number {
             font-size: 2rem;
             font-weight: bold;
-            color: #3498db;
+            color: var(--tblr-primary, #3498db);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -39,21 +41,22 @@
         }
         
         .stat-label {
-            color: #7f8c8d;
+            color: var(--tblr-secondary-color, #7f8c8d);
             font-size: 0.9rem;
             margin-top: 0.5rem;
         }
         
         .containers-section {
-            background: white;
-            border-radius: 5px;
+            background: var(--tblr-card-bg, #fff);
+            border-radius: var(--tblr-border-radius-lg, 0.75rem);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
             overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: var(--tblr-box-shadow-sm, 0 2px 4px rgba(0,0,0,0.06));
         }
         
         .section-header {
-            background: #076196;
-            color: white;
+            background: linear-gradient(135deg, var(--tblr-primary, #076196), #0b4f75);
+            color: var(--tblr-white, #fff);
             padding: 1rem 2rem;
             display: flex;
             justify-content: space-between;
@@ -61,17 +64,20 @@
         }
         
         .refresh-btn {
-            background: #3498db;
-            color: white;
-            border: none;
+            background: var(--tblr-primary, #3498db);
+            color: var(--tblr-white, #fff);
+            border: 1px solid transparent;
             padding: 0.5rem 1rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             font-size: 0.9rem;
+            font-weight: 500;
+            transition: transform 0.15s ease, background 0.2s ease;
         }
         
         .refresh-btn:hover {
-            background: #2980b9;
+            background: var(--tblr-primary-hover, #2980b9);
+            transform: translateY(-1px);
         }
         
         .container-grid {
@@ -82,10 +88,11 @@
         }
         
         .container-card {
-            border: 1px solid #ecf0f1;
-            border-radius: 6px;
+            border: 1px solid var(--tblr-border-color, #ecf0f1);
+            border-radius: var(--tblr-border-radius, 0.5rem);
             overflow: hidden;
             transition: transform 0.2s;
+            background: var(--tblr-card-bg, #fff);
         }
         
         .container-card:hover {
@@ -95,7 +102,7 @@
         
         .container-header {
             padding: 1rem;
-            border-bottom: 1px solid #ecf0f1;
+            border-bottom: 1px solid var(--tblr-border-color, #ecf0f1);
         }
         
         .container-name {
@@ -140,7 +147,7 @@
         }
         
         .detail-label {
-            color: #7f8c8d;
+            color: var(--tblr-secondary-color, #7f8c8d);
             font-weight: 500;
         }
         
@@ -152,15 +159,15 @@
         .service-type {
             display: inline-block;
             padding: 0.2rem 0.5rem;
-            background: #ecf0f1;
-            border-radius: 4px;
+            background: var(--tblr-bg-surface-secondary, #ecf0f1);
+            border-radius: var(--tblr-border-radius-sm, 0.25rem);
             font-size: 0.8rem;
-            color: #2c3e50;
+            color: var(--tblr-body-color, #2c3e50);
         }
         
         .container-actions {
             padding: 1rem;
-            border-top: 1px solid #ecf0f1;
+            border-top: 1px solid var(--tblr-border-color, #ecf0f1);
             display: flex;
             gap: 0.5rem;
         }
@@ -313,7 +320,7 @@
         }
     </style>
     <script>
-        fetch('header.html')
+        fetch('/header')
             .then(response => response.text())
             .then(html => {
                 document.getElementById('shared-header').innerHTML = html;
@@ -389,6 +396,107 @@
             </div>
             <div id="containersContent">
                 <div class="loading">Loading containers...</div>
+            </div>
+        </div>
+
+        <!-- Processing Settings -->
+        <div class="card containers-section" id="processingSettingsSection">
+            <div class="section-header">
+                <h2><i data-lucide="settings" class="icon-md"></i> Processing Settings</h2>
+            </div>
+            <div class="section-content" style="padding: 1.5rem;">
+                <p style="margin-bottom: 1rem; color: var(--tblr-secondary-color);">
+                    Configure resource limits and parallelism for processing jobs. Changes apply to new jobs only.
+                </p>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--tblr-border-color);">
+                            <th style="text-align: left; padding: 0.75rem;">Service</th>
+                            <th style="text-align: center; padding: 0.75rem;">Concurrency</th>
+                            <th style="text-align: center; padding: 0.75rem;">CPU Cores</th>
+                            <th style="text-align: center; padding: 0.75rem;">Memory (MB)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="processingSettingsBody">
+                        <tr>
+                            <td style="padding: 0.75rem;"><strong>Parse</strong></td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-parse-concurrency" min="1" max="10" step="1" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-parse-cpus" min="0.5" max="4" step="0.5" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-parse-memoryMB" min="512" max="8192" step="256" style="width: 80px; text-align: center;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0.75rem;"><strong>Componentize</strong></td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-componentize-concurrency" min="1" max="10" step="1" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-componentize-cpus" min="0.5" max="4" step="0.5" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-componentize-memoryMB" min="512" max="8192" step="256" style="width: 80px; text-align: center;">
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0.75rem;"><strong>Create JSON</strong></td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-jsoncreate-concurrency" min="1" max="10" step="1" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-jsoncreate-cpus" min="0.5" max="4" step="0.5" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-jsoncreate-memoryMB" min="512" max="8192" step="256" style="width: 80px; text-align: center;">
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- Screening Service Settings -->
+                <h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1rem; color: var(--tblr-body-color);">Screening Service</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--tblr-border-color);">
+                            <th style="text-align: left; padding: 0.75rem;">Setting</th>
+                            <th style="text-align: center; padding: 0.75rem;">Value</th>
+                            <th style="text-align: left; padding: 0.75rem;">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding: 0.75rem;"><strong>Max Concurrent Requests</strong></td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-screening-maxConcurrentRequests" min="1" max="10" step="1" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="padding: 0.75rem; color: var(--tblr-secondary-color); font-size: 0.9rem;">Simultaneous screening requests the service will process</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0.75rem;"><strong>Substances Batch Size</strong></td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-screening-substancesBatchSize" min="1" max="50" step="1" style="width: 60px; text-align: center;">
+                            </td>
+                            <td style="padding: 0.75rem; color: var(--tblr-secondary-color); font-size: 0.9rem;">Number of substances sent per screening request</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0.75rem;"><strong>Request Delay (ms)</strong></td>
+                            <td style="text-align: center; padding: 0.75rem;">
+                                <input type="number" id="settings-screening-requestDelayMs" min="0" max="5000" step="50" style="width: 80px; text-align: center;">
+                            </td>
+                            <td style="padding: 0.75rem; color: var(--tblr-secondary-color); font-size: 0.9rem;">Delay between batch requests (throttling)</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <button class="btn btn-success" id="saveProcessingSettingsBtn" onclick="saveProcessingSettings()">
+                        <i data-lucide="save" class="icon-sm"></i> Save Settings
+                    </button>
+                    <span id="settingsSaveStatus" style="color: var(--tblr-secondary-color); font-size: 0.9rem;"></span>
+                </div>
             </div>
         </div>
 
@@ -867,6 +975,83 @@
                 btn.disabled = false;
             }
         }
+
+        // Processing Settings functions
+        async function loadProcessingSettings() {
+            try {
+                const response = await fetch('/api/processing-settings');
+                const data = await response.json();
+                if (data.success && data.settings) {
+                    // Load processing pipeline settings
+                    for (const service of ['parse', 'componentize', 'jsoncreate']) {
+                        const s = data.settings[service];
+                        if (s) {
+                            document.getElementById(`settings-${service}-concurrency`).value = s.concurrency;
+                            document.getElementById(`settings-${service}-cpus`).value = s.cpus;
+                            document.getElementById(`settings-${service}-memoryMB`).value = s.memoryMB;
+                        }
+                    }
+                    // Load screening settings
+                    const screening = data.settings.screening;
+                    if (screening) {
+                        document.getElementById('settings-screening-maxConcurrentRequests').value = screening.maxConcurrentRequests;
+                        document.getElementById('settings-screening-substancesBatchSize').value = screening.substancesBatchSize;
+                        document.getElementById('settings-screening-requestDelayMs').value = screening.requestDelayMs;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load processing settings:', error);
+            }
+        }
+
+        async function saveProcessingSettings() {
+            const settings = {};
+            // Collect processing pipeline settings
+            for (const service of ['parse', 'componentize', 'jsoncreate']) {
+                settings[service] = {
+                    concurrency: parseInt(document.getElementById(`settings-${service}-concurrency`).value) || 5,
+                    cpus: parseFloat(document.getElementById(`settings-${service}-cpus`).value) || 1,
+                    memoryMB: parseInt(document.getElementById(`settings-${service}-memoryMB`).value) || 2048
+                };
+            }
+            // Collect screening settings
+            settings.screening = {
+                maxConcurrentRequests: parseInt(document.getElementById('settings-screening-maxConcurrentRequests').value) || 2,
+                substancesBatchSize: parseInt(document.getElementById('settings-screening-substancesBatchSize').value) || 5,
+                requestDelayMs: parseInt(document.getElementById('settings-screening-requestDelayMs').value) || 100
+            };
+            
+            const statusEl = document.getElementById('settingsSaveStatus');
+            const btn = document.getElementById('saveProcessingSettingsBtn');
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/processing-settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    statusEl.textContent = 'Saved!';
+                    statusEl.style.color = '#27ae60';
+                    // Reload to show validated values
+                    await loadProcessingSettings();
+                } else {
+                    statusEl.textContent = 'Failed: ' + data.error;
+                    statusEl.style.color = '#e74c3c';
+                }
+            } catch (error) {
+                statusEl.textContent = 'Error: ' + error.message;
+                statusEl.style.color = '#e74c3c';
+            }
+            
+            btn.disabled = false;
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        }
+
+        // Load processing settings on page load
+        loadProcessingSettings();
     </script>
 </body>
 </html>

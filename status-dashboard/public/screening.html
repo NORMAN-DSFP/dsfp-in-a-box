@@ -6,12 +6,15 @@
     <title>Screening - DSFP Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="dsfp-auth.js"></script>
+    <script src="sortable-table.js"></script>
     <style>
         /* Page-specific styles only */
         .screening-section {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--tblr-card-bg, white);
+            border-radius: var(--tblr-border-radius-lg, 0.75rem);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            box-shadow: var(--tblr-box-shadow-sm, 0 2px 4px rgba(0,0,0,0.06));
             overflow: hidden;
             margin-bottom: 2rem;
         }
@@ -20,23 +23,27 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 1rem;
+            background: var(--tblr-card-bg, #fff);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            overflow: hidden;
         }
 
         .file-table th,
         .file-table td {
             padding: 1rem;
             text-align: left;
-            border-bottom: 1px solid #ecf0f1;
+            border-bottom: 1px solid var(--tblr-border-color, #ecf0f1);
         }
 
         .file-table th {
-            background: #f8f9fa;
-            color: #2c3e50;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
+            color: var(--tblr-body-color, #2c3e50);
             font-weight: 600;
         }
 
         .file-table tr:hover {
-            background: #f8f9fa;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
         }
 
         .status-badge {
@@ -72,67 +79,72 @@
         }
 
         .file-size {
-            color: #7f8c8d;
+            color: var(--tblr-secondary-color, #7f8c8d);
             font-size: 0.9rem;
         }
 
         .file-date {
-            color: #7f8c8d;
+            color: var(--tblr-secondary-color, #7f8c8d);
             font-size: 0.9rem;
         }
 
         .action-btn {
-            background: #3498db;
-            color: white;
-            border: none;
+            background: var(--tblr-primary, #3498db);
+            color: var(--tblr-white, #fff);
+            border: 1px solid transparent;
             padding: 0.4rem 0.8rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             font-size: 0.8rem;
-            transition: background 0.2s;
+            font-weight: 500;
+            transition: transform 0.15s ease, background 0.2s ease;
             margin-right: 0.5rem;
         }
 
         .action-btn:hover {
-            background: #2980b9;
+            background: var(--tblr-primary-hover, #2980b9);
+            transform: translateY(-1px);
         }
 
         .action-btn.danger {
-            background: #e74c3c;
+            background: var(--tblr-red, #e74c3c);
         }
 
         .action-btn.danger:hover {
-            background: #c0392b;
+            background: color-mix(in srgb, var(--tblr-red, #e74c3c) 88%, black);
         }
 
         .action-btn.success {
-            background: #27ae60;
+            background: var(--tblr-green, #27ae60);
         }
 
         .action-btn.success:hover {
-            background: #229954;
+            background: color-mix(in srgb, var(--tblr-green, #27ae60) 88%, black);
         }
 
         .refresh-btn {
-            background: #3498db;
-            color: white;
-            border: none;
+            background: var(--tblr-primary, #3498db);
+            color: var(--tblr-white, #fff);
+            border: 1px solid transparent;
             padding: 0.5rem 1rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             font-size: 0.9rem;
+            font-weight: 500;
+            transition: transform 0.15s ease, background 0.2s ease;
         }
 
         .refresh-btn:hover {
-            background: #2980b9;
+            background: var(--tblr-primary-hover, #2980b9);
+            transform: translateY(-1px);
         }
 
         .sample-screening-link {
-            background: #27ae60;
-            color: white;
-            border: none;
+            background: var(--tblr-green, #27ae60);
+            color: var(--tblr-white, #fff);
+            border: 1px solid transparent;
             padding: 0.5rem 1rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             font-size: 0.9rem;
             text-decoration: none;
@@ -141,7 +153,7 @@
         }
 
         .sample-screening-link:hover {
-            background: #229954;
+            background: color-mix(in srgb, var(--tblr-green, #27ae60) 88%, black);
         }
 
         .clear-db-btn {
@@ -157,6 +169,37 @@
 
         .clear-db-btn:hover {
             background: #c0392b;
+        }
+
+        .screening-settings {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+        }
+
+        .screening-settings .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .screening-settings label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--tblr-body-color, #2c3e50);
+        }
+
+        .screening-settings input[type="number"] {
+            padding: 0.4rem 0.6rem;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            width: 130px;
         }
 
         .stats-grid {
@@ -420,7 +463,7 @@
         }
     </style>
     <script>
-        fetch('header.html')
+        fetch('/header')
             .then(response => response.text())
             .then(html => {
                 document.getElementById('shared-header').innerHTML = html;
@@ -433,39 +476,32 @@
     <div id="shared-header"></div>
 
     <div class="container">
-        <!-- Statistics Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number total" id="totalFiles">-</div>
-                <div class="stat-label">Total Samples</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number screened" id="screenedFiles">-</div>
-                <div class="stat-label">Screened Samples</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number unprocessed" id="unprocessedFiles">-</div>
-                <div class="stat-label">Unscreened Samples</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="completionRate" style="color: #f39c12;">-</div>
-                <div class="stat-label">Screening Rate</div>
-            </div>
-        </div>
-
         <!-- Screening Index Status -->
         <div class="card screening-section">
             <div class="section-header">
                 <h2><i data-lucide="bar-chart-3" class="icon-md"></i> All Tracked Samples</h2>
                 <div>
                     <button class="btn btn-success" onclick="loadScreeningIndexFiles()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
-                    <a href="sample-screening.html" class="btn btn-default" style="text-decoration: none;"><i data-lucide="target" class="icon-sm"></i> Screen individual sample</a>
+                    <a href="sample-screening" class="btn btn-default" style="text-decoration: none;"><i data-lucide="target" class="icon-sm"></i> Screen individual sample</a>
                     <button class="btn btn-danger" onclick="clearScreeningDatabase()"><i data-lucide="trash-2" class="icon-sm"></i> Delete samples</button>
                 </div>
             </div>
             
             <div class="section-content">
-                
+
+                <div class="screening-settings">
+                    <div class="form-group">
+                        <label for="screeningMzTolerance">m/z Tolerance:</label>
+                        <input type="number" id="screeningMzTolerance" name="screeningMzTolerance"
+                               value="0.005" step="0.001" min="0.001" max="1.0">
+                    </div>
+                    <div class="form-group">
+                        <label for="screeningRtiTolerance">RTI Tolerance (%):</label>
+                        <input type="number" id="screeningRtiTolerance" name="screeningRtiTolerance"
+                               value="20.0" step="1.0" min="1.0" max="100.0">
+                    </div>
+                </div>
+
                 <div id="screeningIndexContainer">
                     <div class="loading">
                         <i data-lucide="loader" class="icon-md"></i> Loading sample tracking data...
@@ -529,7 +565,7 @@
 
             // Format and render the table
             const tableHTML = `
-                <table class="screening-index-table">
+                <table class="screening-index-table" data-sortable="true">
                     <thead>
                         <tr>
                             <th>Sample ID</th>
@@ -586,7 +622,7 @@
                                                     title="${isComplete ? 'Screening Complete' : 'Resume Screening'}">
                                                 <i data-lucide="${isComplete ? 'check' : 'play'}" class="icon-sm"></i>
                                             </button>
-                                            <a target="_blank" href="detections.html?sample_id=${sample.sample_id}" 
+                                                          <a target="_blank" href="/detections?sample_id=${sample.sample_id}" 
                                                class="jump-link" 
                                                title="View detections for this sample">
                                                 <i data-lucide="search" class="icon-sm"></i>
@@ -714,6 +750,27 @@
 
         // Track active screening sessions
         const activeScreeningSessions = new Map();
+        
+        // Screening settings (loaded from server)
+        let screeningSettings = {
+            maxConcurrentRequests: 2,
+            substancesBatchSize: 5,
+            requestDelayMs: 100
+        };
+        
+        // Load screening settings from server
+        async function loadScreeningSettings() {
+            try {
+                const response = await fetch('/api/processing-settings');
+                const data = await response.json();
+                if (data.success && data.settings && data.settings.screening) {
+                    screeningSettings = data.settings.screening;
+                    console.log('Loaded screening settings:', screeningSettings);
+                }
+            } catch (error) {
+                console.warn('Failed to load screening settings, using defaults:', error);
+            }
+        }
 
         // Disable/enable all play buttons
         function setAllPlayButtonsState(disabled) {
@@ -839,53 +896,76 @@
             }
         }
 
+        // Get the currently configured m/z and RTI tolerances from the settings inputs
+        function getScreeningTolerances() {
+            const mzInput = document.getElementById('screeningMzTolerance');
+            const rtiInput = document.getElementById('screeningRtiTolerance');
+
+            const mzTolerance = parseFloat(mzInput?.value);
+            const rtiTolerance = parseFloat(rtiInput?.value);
+
+            return {
+                mz_tolerance: Number.isFinite(mzTolerance) ? mzTolerance : 0.005,
+                rti_tolerance: Number.isFinite(rtiTolerance) ? rtiTolerance : 20.0
+            };
+        }
+
         // Screen substances for a sample
         async function screenSubstances(session) {
             const { sampleId, substances } = session;
+            const batchSize = screeningSettings.substancesBatchSize || 5;
+            const requestDelay = screeningSettings.requestDelayMs || 100;
+            const { mz_tolerance, rti_tolerance } = getScreeningTolerances();
 
             try {
                 while (session.currentIndex < substances.length && !session.isPaused) {
-                    const substance = substances[session.currentIndex];
+                    // Get batch of substances
+                    const batchEnd = Math.min(session.currentIndex + batchSize, substances.length);
+                    const batch = substances.slice(session.currentIndex, batchEnd);
                     
-                    // Call screening service
+                    // Call screening service with batch
                     const screeningResponse = await fetch('/api/screen-sample', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             sample_id: sampleId,
-                            substances: [substance],
-                            mz_tolerance: 0.005,
-                            rti_tolerance: 20.0,
+                            substances: batch,
+                            mz_tolerance: mz_tolerance,
+                            rti_tolerance: rti_tolerance,
                             filter_by_blanks: true
                         })
                     });
 
                     if (!screeningResponse.ok) {
-                        console.error(`Failed to screen substance ${substance}`);
+                        console.error(`Failed to screen batch starting at ${batch[0]}`);
+                        // Still advance to avoid infinite loop
+                        session.currentIndex = batchEnd;
                     } else {
                         // Wait for the response to complete before incrementing
                         const screeningResult = await screeningResponse.json();
 
-                        // Check if the substance was successfully loaded from Elasticsearch
-                        // success === false means the substance couldn't be loaded (Elasticsearch query error)
+                        // Check if the batch was successfully processed
+                        // success === false means substances couldn't be loaded (Elasticsearch query error)
                         // success === true means it was loaded and processed (even if no detections found)
                         if (screeningResult.success !== false) {
-                            // Now increment the counter after screening is complete
-                            session.currentIndex++;
+                            // Advance by batch size
+                            session.currentIndex = batchEnd;
 
                             // Update progress bar
                             const substancesScreened = session.initialScreened + session.currentIndex;
                             const progressPercentage = Math.round((substancesScreened / session.totalSubstances) * 100);
                             updateProgressBar(sampleId, substancesScreened, session.totalSubstances, progressPercentage);
                         } else {
-                            console.warn(`Substance ${substance} failed to load from Elasticsearch (${screeningResult.message}). Skipping...`);
-                            // Still move to next substance, but don't count it as screened
-                            session.currentIndex++;
+                            console.warn(`Batch starting at ${batch[0]} failed to load from Elasticsearch (${screeningResult.message}). Skipping...`);
+                            // Still advance to avoid infinite loop
+                            session.currentIndex = batchEnd;
                         }
                     }
 
-                    // Small delay to prevent overwhelming the server
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Configurable delay between batch requests
+                    if (session.currentIndex < substances.length && !session.isPaused) {
+                        await new Promise(resolve => setTimeout(resolve, requestDelay));
+                    }
                 }
 
                 // Check if completed
@@ -978,17 +1058,8 @@
             }
         }
 
-        // Update statistics
+        // Update statistics - no-op: the summary metrics cards were removed from this page.
         function updateStats() {
-            const total = screeningData.length;
-            const screened = screeningData.filter(s => s.substances_screened > 0).length;
-            const unscreened = screeningData.filter(s => s.substances_screened === 0).length;
-            const completionRate = total > 0 ? Math.round((screened / total) * 100) : 0;
-
-            document.getElementById('totalFiles').textContent = total;
-            document.getElementById('screenedFiles').textContent = screened;
-            document.getElementById('unprocessedFiles').textContent = unscreened;
-            document.getElementById('completionRate').textContent = completionRate + '%';
         }
 
         // Clear screening database
@@ -1037,6 +1108,7 @@
 
         // Initialize page
         async function initializePage() {
+            await loadScreeningSettings();
             await loadScreeningIndexFiles();
             updateStats();
         }

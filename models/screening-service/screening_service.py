@@ -31,6 +31,47 @@ SCREENING_INDEX = "dsfp-screening-index"
 es_client = Elasticsearch([ELASTICSEARCH_URL])
 substance_client = Elasticsearch([SUBSTANCE_CLIENT_URL])
 
+# Settings file path (mounted from host)
+SETTINGS_FILE = '/data/processing-settings.json'
+
+# Default screening settings
+DEFAULT_SCREENING_SETTINGS = {
+    'maxConcurrentRequests': 2,
+    'substancesBatchSize': 5,
+    'requestDelayMs': 100
+}
+
+# Global semaphore for concurrency control (initialized with default, updated on each request)
+_screening_semaphore = asyncio.Semaphore(DEFAULT_SCREENING_SETTINGS['maxConcurrentRequests'])
+_current_max_concurrent = DEFAULT_SCREENING_SETTINGS['maxConcurrentRequests']
+_active_requests = 0
+_queued_requests = 0
+
+def load_screening_settings() -> Dict[str, Any]:
+    """Load screening settings from processing-settings.json"""
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, 'r') as f:
+                data = json.load(f)
+                screening = data.get('screening', {})
+                return {
+                    'maxConcurrentRequests': screening.get('maxConcurrentRequests', DEFAULT_SCREENING_SETTINGS['maxConcurrentRequests']),
+                    'substancesBatchSize': screening.get('substancesBatchSize', DEFAULT_SCREENING_SETTINGS['substancesBatchSize']),
+                    'requestDelayMs': screening.get('requestDelayMs', DEFAULT_SCREENING_SETTINGS['requestDelayMs'])
+                }
+    except Exception as e:
+        logger.warning(f"Failed to load screening settings, using defaults: {e}")
+    return DEFAULT_SCREENING_SETTINGS.copy()
+
+def get_or_update_semaphore(max_concurrent: int) -> asyncio.Semaphore:
+    """Get semaphore, recreating if max_concurrent changed"""
+    global _screening_semaphore, _current_max_concurrent
+    if max_concurrent != _current_max_concurrent:
+        logger.info(f"Updating semaphore from {_current_max_concurrent} to {max_concurrent} concurrent requests")
+        _screening_semaphore = asyncio.Semaphore(max_concurrent)
+        _current_max_concurrent = max_concurrent
+    return _screening_semaphore
+
 class ScreeningRequest(BaseModel):
     sample_id: str  # Sample ID to retrieve from the screening index
     substances: List[str]  # List of substance names/IDs to search for
@@ -55,6 +96,19 @@ class SubstanceData(BaseModel):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "screening-service"}
+
+@app.get("/settings")
+async def get_settings():
+    """Return current screening settings and request statistics"""
+    settings = load_screening_settings()
+    return {
+        "settings": settings,
+        "status": {
+            "active_requests": _active_requests,
+            "queued_requests": _queued_requests,
+            "max_concurrent": _current_max_concurrent
+        }
+    }
 
 async def get_sample_data(sample_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve sample data from the screening index"""
@@ -98,76 +152,75 @@ async def save_screening_result(request: ScreeningRequest, sample_data: Dict, sc
         sys.path.append('/app/setup')
         from tracking_db import TrackingDatabase
         
-        # Create a new database instance with a fresh connection
-        db = TrackingDatabase()
-        logger.info(f"[SAVE DEBUG] Database connection created successfully")
+        # Use a context manager so the cross-process DuckDB file lock is
+        # always released, even if an error occurs while saving.
+        with TrackingDatabase() as db:
+            logger.info(f"[SAVE DEBUG] Database connection created successfully")
+            
+            # Create a set of substances that had actual detection results
+            substances_with_results = set()
+            logger.info(f"[SAVE DEBUG] Processing substances with detection results...")
+            for result in screening_results:
+                substance_name = result.get('substance_name')
+                if substance_name:
+                    logger.info(f"[SAVE DEBUG] Saving result for substance: {substance_name}")
+                    substances_with_results.add(substance_name)
+                    # Save the actual detection result
+                    success = db.save_screening_result(
+                        sample_id=request.sample_id,
+                        substance_name=substance_name,
+                        substance_id=result.get('substance_id', substance_name),
+                        result_data=result,
+                        timestamp=datetime.utcnow().isoformat() + 'Z'
+                    )
+                    if not success:
+                        logger.warning(f"Failed to save screening result for substance {substance_name}")
+                    else:
+                        logger.info(f"[SAVE DEBUG] Successfully saved detection result for {substance_name}")
+            
+            logger.info(f"[SAVE DEBUG] Substances with results: {substances_with_results}")
+            logger.info(f"[SAVE DEBUG] Processing substances without detection results...")
+            # For substances that were screened but had NO results, still track them
+            # so that resuming a paused screening session correctly skips them.
+            for substance_name in request.substances:
+                if substance_name not in substances_with_results:
+                    logger.info(f"[SAVE DEBUG] Saving no-result tracking for substance: {substance_name}")
+                    # Create a minimal result_data with sample info but no detection
+                    minimal_result = {
+                        'collection_id': sample_data.get('collection_id'),
+                        'collection_uid': sample_data.get('collection_uid'),
+                        'collection_title': sample_data.get('collection_title'),
+                        'short_name': sample_data.get('short_name'),
+                        'matrix_type': sample_data.get('matrix_type'),
+                        'matrix_type2': sample_data.get('matrix_type2'),
+                        'sample_type': sample_data.get('sample_type'),
+                        'monitored_city': sample_data.get('monitored_city'),
+                        'sampling_date': sample_data.get('sampling_date'),
+                        'analysis_date': sample_data.get('analysis_date'),
+                        'latitude': sample_data.get('latitude'),
+                        'longitude': sample_data.get('longitude'),
+                        'instrument_setup_used': sample_data.get('instrument_setup_used', {}),
+                        'mz_tolerance': request.mz_tolerance,
+                        'rti_tolerance': request.rti_tolerance,
+                        'filter_by_blanks': request.filter_by_blanks,
+                        'scores': {},  # Empty scores
+                        'semiquantification': None,
+                        'matches': []  # No matches - marks this as a non-detect
+                    }
+                    
+                    success = db.save_screening_result(
+                        sample_id=request.sample_id,
+                        substance_name=substance_name,
+                        substance_id=substance_name,
+                        result_data=minimal_result,
+                        timestamp=datetime.utcnow().isoformat() + 'Z'
+                    )
+                    if not success:
+                        logger.warning(f"Failed to save no-result tracking for substance {substance_name}")
+                    else:
+                        logger.info(f"[SAVE DEBUG] Successfully saved no-result tracking for {substance_name}")
         
-        # Create a set of substances that had actual detection results
-        substances_with_results = set()
-        logger.info(f"[SAVE DEBUG] Processing substances with detection results...")
-        for result in screening_results:
-            substance_name = result.get('substance_name')
-            if substance_name:
-                logger.info(f"[SAVE DEBUG] Saving result for substance: {substance_name}")
-                substances_with_results.add(substance_name)
-                # Save the actual detection result
-                success = db.save_screening_result(
-                    sample_id=request.sample_id,
-                    substance_name=substance_name,
-                    substance_id=result.get('substance_id', substance_name),
-                    result_data=result,
-                    timestamp=datetime.utcnow().isoformat() + 'Z'
-                )
-                if not success:
-                    logger.warning(f"Failed to save screening result for substance {substance_name}")
-                else:
-                    logger.info(f"[SAVE DEBUG] Successfully saved detection result for {substance_name}")
-        
-        logger.info(f"[SAVE DEBUG] Substances with results: {substances_with_results}")
-        logger.info(f"[SAVE DEBUG] Processing substances without detection results...")
-        # For substances that were screened but had NO results, still track them
-        for substance_name in request.substances:
-            if substance_name not in substances_with_results:
-                logger.info(f"[SAVE DEBUG] Saving no-result tracking for substance: {substance_name}")
-                # Create a minimal result_data with sample info but no detection
-                minimal_result = {
-                    'collection_id': sample_data.get('collection_id'),
-                    'collection_uid': sample_data.get('collection_uid'),
-                    'collection_title': sample_data.get('collection_title'),
-                    'short_name': sample_data.get('short_name'),
-                    'matrix_type': sample_data.get('matrix_type'),
-                    'matrix_type2': sample_data.get('matrix_type2'),
-                    'sample_type': sample_data.get('sample_type'),
-                    'monitored_city': sample_data.get('monitored_city'),
-                    'sampling_date': sample_data.get('sampling_date'),
-                    'analysis_date': sample_data.get('analysis_date'),
-                    'latitude': sample_data.get('latitude'),
-                    'longitude': sample_data.get('longitude'),
-                    'instrument_setup_used': sample_data.get('instrument_setup_used', {}),
-                    'mz_tolerance': request.mz_tolerance,
-                    'rti_tolerance': request.rti_tolerance,
-                    'filter_by_blanks': request.filter_by_blanks,
-                    'scores': {},  # Empty scores
-                    'semiquantification': None,
-                    'matches': []  # No matches
-                }
-                
-                success = db.save_screening_result(
-                    sample_id=request.sample_id,
-                    substance_name=substance_name,
-                    substance_id=substance_name,
-                    result_data=minimal_result,
-                    timestamp=datetime.utcnow().isoformat() + 'Z'
-                )
-                if not success:
-                    logger.warning(f"Failed to save no-result tracking for substance {substance_name}")
-                else:
-                    logger.info(f"[SAVE DEBUG] Successfully saved no-result tracking for {substance_name}")
-        
-        # Properly close the database connection
-        db.close()
         logger.info(f"[SAVE DEBUG] Database connection closed")
-        
         logger.info(f"Successfully saved screening results to DuckDB for sample {request.sample_id}")
         return {"success": True, "screening_id": f"{request.sample_id}_screening"}
             
@@ -184,42 +237,60 @@ async def screen_sample(request: ScreeningRequest):
     Screen a single sample against specified substances.
     The service will retrieve the sample data from the screening index using the provided sample_id.
     """
+    global _active_requests, _queued_requests
+    
+    # Load current settings and get semaphore
+    settings = load_screening_settings()
+    semaphore = get_or_update_semaphore(settings['maxConcurrentRequests'])
+    
+    # Track queued requests
+    _queued_requests += 1
+    if _queued_requests > 1:
+        logger.info(f"Request for sample {request.sample_id} queued (position {_queued_requests}, {_active_requests} active)")
+    
     try:
-        logger.info(f"Starting screening for sample {request.sample_id}")
-        
-        # Step 1: Retrieve sample data from the screening index
-        sample_data = await get_sample_data(request.sample_id)
-        
-        if not sample_data:
-            return {"results": [], "message": f"Sample {request.sample_id} not found in screening index"}
-        
-        # Step 2: Get substance data from compounds index
-        substance_data = await get_substance_data(request.substances)
-        if not substance_data:
-            # Even if no substance data found, save tracking records for failed substance loads
-            await save_screening_result(request, sample_data, [])
-            return {"results": [], "substance_count": 0, "message": "No valid substances found", "success": False}
-        
-        # Step 3: Get RTI bounds for search windows
-        rti_bounds = await get_rti_bounds()
-        
-        # Step 4: Perform primary search
-        primary_results = await perform_primary_search(
-            request, sample_data, substance_data, rti_bounds
-        )
-        
-        # Step 5: Process results and calculate scores
-        final_results = await process_results(
-            request, sample_data, substance_data, primary_results, rti_bounds
-        )
-        
-        # Step 6: Save screening results to DuckDB tracking database
-        await save_screening_result(request, sample_data, final_results)
-        
-        logger.info(f"Screening completed with {len(final_results)} results")
-        return {"results": final_results, "substance_count": len(substance_data), "success": True}
-        
+        # Acquire semaphore - blocks if too many concurrent requests
+        async with semaphore:
+            _queued_requests -= 1
+            _active_requests += 1
+            logger.info(f"Starting screening for sample {request.sample_id} ({_active_requests} active, {_queued_requests} queued)")
+            
+            try:
+                # Step 1: Retrieve sample data from the screening index
+                sample_data = await get_sample_data(request.sample_id)
+                
+                if not sample_data:
+                    return {"results": [], "message": f"Sample {request.sample_id} not found in screening index"}
+                
+                # Step 2: Get substance data from compounds index
+                substance_data = await get_substance_data(request.substances)
+                if not substance_data:
+                    # Even if no substance data found, save tracking records for failed substance loads
+                    await save_screening_result(request, sample_data, [])
+                    return {"results": [], "substance_count": 0, "message": "No valid substances found", "success": False}
+                
+                # Step 3: Get RTI bounds for search windows
+                rti_bounds = await get_rti_bounds()
+                
+                # Step 4: Perform primary search
+                primary_results = await perform_primary_search(
+                    request, sample_data, substance_data, rti_bounds
+                )
+                
+                # Step 5: Process results and calculate scores
+                final_results = await process_results(
+                    request, sample_data, substance_data, primary_results, rti_bounds
+                )
+                
+                # Step 6: Save screening results to DuckDB tracking database
+                await save_screening_result(request, sample_data, final_results)
+                
+                logger.info(f"Screening completed with {len(final_results)} results")
+                return {"results": final_results, "substance_count": len(substance_data), "success": True}
+            finally:
+                _active_requests -= 1
     except Exception as e:
+        _queued_requests = max(0, _queued_requests - 1)
         logger.error(f"Screening failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Screening failed: {str(e)}")
 
@@ -1087,6 +1158,12 @@ async def call_semiquantification(hits, substance):
                         if response.status == 200:
                             response_text = await response.text()
                             data = json.loads(response_text)
+                            if data.get('error'):
+                                logger.warning(
+                                    "Semiquantification unavailable for setup %s: %s",
+                                    setup_id,
+                                    data['error']
+                                )
                             
                             result = {
                                 "setup_id": setup_id,
@@ -1096,7 +1173,12 @@ async def call_semiquantification(hits, substance):
                             }
                             promises.append(result)
                         else:
-                            logger.error(f"Semiquantification service returned status {response.status}")
+                            response_text = await response.text()
+                            logger.error(
+                                "Semiquantification service returned status %s: %s",
+                                response.status,
+                                response_text
+                            )
                             promises.append(None)
                             
                 except Exception as e:

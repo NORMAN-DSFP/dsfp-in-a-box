@@ -6,6 +6,7 @@
     <title>Detections - DSFP Dashboard</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="dsfp-auth.js"></script>
     <style>
         /* Page-specific styles */
         .stats-grid {
@@ -54,12 +55,16 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             text-align: center;
         }
-        
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #076196;
-            margin-bottom: 0.5rem;
+        .detections-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            background: var(--tblr-card-bg, #fff);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            overflow: hidden;
+        }
         }
         
         .stat-label {
@@ -101,60 +106,62 @@
         }
 
         .clear-btn {
-            background: #e74c3c;
-            color: white;
+            background: var(--tblr-red, #e74c3c);
+            color: var(--tblr-white, #fff);
             border: none;
             padding: 0.5rem 1rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             font-size: 0.9rem;
             margin-left: 0.5rem;
         }
 
         .clear-btn:hover {
-            background: #c0392b;
+            background: color-mix(in srgb, var(--tblr-red, #e74c3c) 88%, black);
         }
 
         .clear-filter-btn {
-            background: #95a5a6;
-            color: white;
+            background: var(--tblr-secondary, #95a5a6);
+            color: var(--tblr-white, #fff);
             border: none;
             padding: 0.5rem 1rem;
-            border-radius: 4px;
+            border-radius: var(--tblr-border-radius, 0.5rem);
             cursor: pointer;
             font-size: 0.9rem;
         }
 
         .clear-filter-btn:hover {
-            background: #7f8c8d;
+            background: color-mix(in srgb, var(--tblr-secondary, #95a5a6) 88%, black);
         }
         
         .view-toggle-container {
             display: inline-flex;
-            border: 2px solid #3498db;
-            border-radius: 6px;
+            border: 1px solid var(--tblr-border-color, #dbe5ee);
+            border-radius: var(--tblr-border-radius, 0.5rem);
             overflow: hidden;
             margin-left: 0.5rem;
             margin-right: 0.5rem;
+            background: var(--tblr-bg-surface-secondary, #eef3f8);
         }
 
         .view-toggle-btn {
-            background: white;
-            color: #3498db;
+            background: transparent;
+            color: var(--tblr-body-color, #3498db);
             border: none;
-            padding: 0.5rem 1rem;
+            padding: 0.55rem 1rem;
             cursor: pointer;
             font-size: 0.9rem;
-            transition: all 0.2s;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
 
         .view-toggle-btn:hover {
-            background: #e8f4f8;
+            background: var(--tblr-card-bg, #fff);
         }
 
         .view-toggle-btn.active {
-            background: #3498db;
-            color: white;
+            background: var(--tblr-primary, #3498db);
+            color: var(--tblr-white, #fff);
         }
 
         .stats-grid {
@@ -196,12 +203,12 @@
         .detections-table td {
             padding: 0.75rem;
             text-align: left;
-            border-bottom: 1px solid #ecf0f1;
+            border-bottom: 1px solid var(--tblr-border-color, #ecf0f1);
         }
 
         .detections-table th {
-            background: #f8f9fa;
-            color: #2c3e50;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
+            color: var(--tblr-body-color, #2c3e50);
             font-weight: 600;
             position: sticky;
             top: 0;
@@ -209,7 +216,7 @@
         }
 
         .detections-table tr:hover {
-            background: #f8f9fa;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
         }
 
         .score-badge {
@@ -230,14 +237,14 @@
             border: none;
             cursor: pointer;
             font-size: 0.9rem;
-            color: #076196;
+            color: var(--tblr-primary, #076196);
             padding: 0.25rem 0.5rem;
             transition: transform 0.2s ease;
         }
 
         .expand-btn:hover {
-            background: #f0f0f0;
-            border-radius: 3px;
+            background: var(--tblr-bg-surface-secondary, #f0f0f0);
+            border-radius: var(--tblr-border-radius-sm, 0.25rem);
         }
 
         .expand-btn.expanded {
@@ -245,43 +252,46 @@
         }
 
         .matches-row {
-            background: #f8f9fa;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
         }
 
         .matches-container {
             padding: 1rem;
             margin: 0.5rem 0;
-            border-left: 3px solid #076196;
+            border-left: 3px solid var(--tblr-primary, #076196);
         }
 
         .matches-container h4 {
             margin-bottom: 0.75rem;
-            color: #076196;
+            color: var(--tblr-primary, #076196);
             font-size: 1rem;
         }
 
         .matches-table {
             width: 100%;
             border-collapse: collapse;
-            background: white;
+            background: var(--tblr-card-bg, #fff);
             font-size: 0.85rem;
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            overflow: hidden;
         }
 
         .matches-table th {
-            background: #e9ecef;
+            background: var(--tblr-bg-surface-secondary, #e9ecef);
             padding: 0.5rem;
             text-align: left;
             font-weight: 600;
-            border-bottom: 2px solid #dee2e6;
+            border-bottom: 2px solid var(--tblr-border-color, #dee2e6);
         }
 
         .matches-table td {
             padding: 0.5rem;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid var(--tblr-border-color, #e9ecef);
         }
 
         .matches-table tr:hover {
-            background: #f8f9fa;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
         }
 
         .loading {
@@ -298,7 +308,7 @@
 
         .empty-state h3 {
             margin-bottom: 1rem;
-            color: #2c3e50;
+            color: var(--tblr-body-color, #2c3e50);
         }
 
         .table-container {
@@ -317,14 +327,18 @@
             border-collapse: collapse;
             font-size: 0.85rem;
             min-width: 100%;
+            background: var(--tblr-card-bg, #fff);
+            border: 1px solid var(--tblr-border-color, #dfe6ec);
+            border-radius: var(--tblr-border-radius, 0.5rem);
+            overflow: hidden;
         }
 
         .heatmap-table th {
-            background: #f8f9fa;
-            color: #2c3e50;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
+            color: var(--tblr-body-color, #2c3e50);
             font-weight: 600;
             padding: 0.5rem;
-            border: 1px solid #ecf0f1;
+            border: 1px solid var(--tblr-border-color, #ecf0f1);
             text-align: center;
             position: sticky;
             top: 0;
@@ -335,14 +349,14 @@
             position: sticky;
             left: 0;
             z-index: 20;
-            background: #076196;
-            color: white;
+            background: var(--tblr-primary, #076196);
+            color: var(--tblr-white, #fff);
             text-align: left;
             min-width: 200px;
         }
 
         .heatmap-table td {
-            border: 1px solid #ecf0f1;
+            border: 1px solid var(--tblr-border-color, #ecf0f1);
             padding: 0.5rem;
             text-align: center;
             min-width: 80px;
@@ -351,7 +365,7 @@
         .heatmap-table td.substance-name {
             position: sticky;
             left: 0;
-            background: #f8f9fa;
+            background: var(--tblr-bg-surface-secondary, #f8f9fa);
             font-weight: 600;
             text-align: left;
             z-index: 5;
@@ -360,22 +374,22 @@
         .heatmap-table td.heatmap-cell {
             font-weight: 600;
             text-align: center;
-            color: #333;
+            color: var(--tblr-body-color, #333);
         }
 
         .heatmap-table td.heatmap-not-detected {
-            color: #757575;
-            background: #e0e0e0;
+            color: var(--tblr-secondary-color, #757575);
+            background: var(--tblr-bg-surface-secondary, #e0e0e0);
         }
 
         .heatmap-table td.heatmap-no-match {
-            background: #e0e0e0;
-            color: #757575;
+            background: var(--tblr-bg-surface-secondary, #e0e0e0);
+            color: var(--tblr-secondary-color, #757575);
         }
 
         /* Color gradient for detected values will be applied inline */
         .heatmap-table td.heatmap-value {
-            color: #000;
+            color: var(--tblr-body-color, #000);
         }
 
         .view-container {
@@ -398,7 +412,7 @@
         }
     </style>
     <script>
-        fetch('header.html')
+        fetch('/header')
             .then(response => response.text())
             .then(html => {
                 document.getElementById('shared-header').innerHTML = html;
@@ -454,6 +468,12 @@
                     <select id="sampleFilter" class="filter-select" onchange="filterBySample()">
                         <option value="">All Samples</option>
                     </select>
+                    <span class="filter-label">Filter by Result:</span>
+                    <select id="detectionFilter" class="filter-select" onchange="filterByDetection()">
+                        <option value="all">All</option>
+                        <option value="true">Detects Only</option>
+                        <option value="false">Non-detects Only</option>
+                    </select>
                     <button class="clear-filter-btn" onclick="clearFilter()">Clear Filter</button>
                 </div>
 
@@ -478,6 +498,7 @@
         let allDetections = [];
         let allSamples = [];
         let currentFilter = null;
+        let currentDetectionFilter = 'all';
         let currentView = 'table';
 
         // Initialize page
@@ -537,9 +558,15 @@
                 document.getElementById('tableViewContainer').innerHTML = '<div class="loading">🔍 Loading detection results...</div>';
                 document.getElementById('heatmapViewContainer').innerHTML = '<div class="loading">🔍 Loading heatmap...</div>';
                 
-                const url = currentFilter 
-                    ? `/api/detections?sample_id=${encodeURIComponent(currentFilter)}`
-                    : '/api/detections';
+                const params = new URLSearchParams();
+                if (currentFilter) {
+                    params.set('sample_id', currentFilter);
+                }
+                if (currentDetectionFilter && currentDetectionFilter !== 'all') {
+                    params.set('detected', currentDetectionFilter);
+                }
+                const queryString = params.toString();
+                const url = queryString ? `/api/detections?${queryString}` : '/api/detections';
                 
                 const response = await fetch(url);
                 const data = await response.json();
@@ -580,8 +607,13 @@
                 ? ((ipScores.reduce((a, b) => a + b, 0) / ipScores.length) * 100).toFixed(1) + '%'
                 : 'N/A';
 
+            const totalLabel = currentDetectionFilter === 'true' ? 'Detects Shown'
+                : currentDetectionFilter === 'false' ? 'Non-detects Shown'
+                : 'Total Results';
+
             document.getElementById('samplesAnalyzed').textContent = uniqueSamples;
             document.getElementById('totalDetections').textContent = total;
+            document.querySelector('#totalDetections').nextElementSibling.textContent = totalLabel;
             document.getElementById('uniqueSubstances').textContent = uniqueSubstances;
             document.getElementById('avgIpScore').textContent = avgIpScore;
         }
@@ -597,8 +629,8 @@
                         <p>No screening results available${currentFilter ? ' for the selected sample' : ''}.</p>
                         <p style="margin-top: 1rem;">
                             ${currentFilter 
-                                ? 'To screen this sample, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a>.'
-                                : 'To start screening samples, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a> for targeted analysis.'}
+                                ? 'To screen this sample, go to the <a href="/screening" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="/sample-screening" style="color: #076196; font-weight: 600;">Individual Sample Screening</a>.'
+                                : 'To start screening samples, go to the <a href="/screening" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="/sample-screening" style="color: #076196; font-weight: 600;">Individual Sample Screening</a> for targeted analysis.'}
                         </p>
                     </div>
                 `;
@@ -708,8 +740,8 @@
                         <p>No screening results available${currentFilter ? ' for the selected sample' : ''}.</p>
                         <p style="margin-top: 1rem;">
                             ${currentFilter 
-                                ? 'To screen this sample, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a>.'
-                                : 'To start screening samples, go to the <a href="screening.html" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="sample_screening.html" style="color: #076196; font-weight: 600;">Individual Sample Screening</a> for targeted analysis.'}
+                                ? 'To screen this sample, go to the <a href="/screening" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="/sample-screening" style="color: #076196; font-weight: 600;">Individual Sample Screening</a>.'
+                                : 'To start screening samples, go to the <a href="/screening" style="color: #076196; font-weight: 600;">Screening page</a> or use <a href="/sample-screening" style="color: #076196; font-weight: 600;">Individual Sample Screening</a> for targeted analysis.'}
                         </p>
                     </div>
                 `;
@@ -898,10 +930,19 @@
             loadDetections();
         }
 
+        // Filter by detection status (detects / non-detects / all)
+        function filterByDetection() {
+            const filterSelect = document.getElementById('detectionFilter');
+            currentDetectionFilter = filterSelect.value || 'all';
+            loadDetections();
+        }
+
         // Clear filter
         function clearFilter() {
             currentFilter = null;
+            currentDetectionFilter = 'all';
             document.getElementById('sampleFilter').value = '';
+            document.getElementById('detectionFilter').value = 'all';
             
             // Clear URL parameter
             const url = new URL(window.location);

@@ -51,10 +51,18 @@ CREATE TABLE IF NOT EXISTS screening_results (
     concentration DOUBLE,
     -- Matching inner hits from Elasticsearch
     matches JSON,
+    -- Whether this substance was actually detected (has match results) vs a non-detect
+    is_detected BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Composite primary key to ensure only one result per sample-substance
     PRIMARY KEY (sample_id, substance_name)
 );
+
+-- Migration: add is_detected column to pre-existing tables that predate this column
+ALTER TABLE screening_results ADD COLUMN IF NOT EXISTS is_detected BOOLEAN DEFAULT FALSE;
+
+-- Migration: backfill is_detected for existing rows based on presence of matches
+UPDATE screening_results SET is_detected = TRUE WHERE matches IS NOT NULL AND (is_detected IS NULL OR is_detected = FALSE);
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_tracking_sample_id ON screening_tracking(sample_id);
@@ -73,7 +81,7 @@ SELECT
     COUNT(DISTINCT r.substance_name) as substances_screened,
     COUNT(*) as total_results,
     t.last_screened,
-    COUNT(CASE WHEN r.spectral_similarity_score > 0.7 THEN 1 END) as total_detections
+    COUNT(CASE WHEN r.is_detected THEN 1 END) as total_detections
 FROM screening_tracking t
 LEFT JOIN screening_results r ON t.sample_id = r.sample_id
 GROUP BY t.sample_id, t.short_name, t.last_screened

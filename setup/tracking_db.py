@@ -5,6 +5,8 @@ Replaces Elasticsearch-based tracking with DuckDB + Parquet storage
 """
 
 import os
+import time
+import fcntl
 import duckdb
 import json
 import pandas as pd
@@ -22,13 +24,45 @@ class TrackingDatabase:
         self.db_path = db_path
         self.parquet_dir = parquet_dir
         self.conn = None
+        self._lock_fp = None
         
         # Ensure directories exist
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         os.makedirs(parquet_dir, exist_ok=True)
         
+        # DuckDB does not support multiple OS processes opening the same
+        # database file concurrently - doing so can silently corrupt the
+        # file or cause one process to see a stale snapshot of the data.
+        # This process runs in multiple separate containers/subprocesses,
+        # so we serialize access with a cross-process advisory file lock
+        # for the entire lifetime of the connection.
+        self._acquire_lock()
+        
         # Initialize database
         self._initialize_db()
+    
+    def _acquire_lock(self):
+        """Acquire an exclusive, blocking cross-process lock for this db file"""
+        lock_path = self.db_path + '.lock'
+        self._lock_fp = open(lock_path, 'w')
+        start = time.monotonic()
+        fcntl.flock(self._lock_fp, fcntl.LOCK_EX)
+        waited = time.monotonic() - start
+        if waited > 1:
+            logger.info(f"Waited {waited:.2f}s to acquire DuckDB file lock")
+    
+    def _release_lock(self):
+        """Release the cross-process lock, if held"""
+        if self._lock_fp is not None:
+            try:
+                fcntl.flock(self._lock_fp, fcntl.LOCK_UN)
+            except Exception as e:
+                logger.error(f"Error releasing DuckDB file lock: {e}")
+            try:
+                self._lock_fp.close()
+            except Exception:
+                pass
+            self._lock_fp = None
     
     def __enter__(self):
         """Context manager entry"""
@@ -39,15 +73,12 @@ class TrackingDatabase:
         self.close()
         return False
     
-    def close(self):
-        """Explicitly close database connection"""
-        if self.conn:
-            try:
-                self.conn.close()
-                self.conn = None
-                logger.info("Database connection closed")
-            except Exception as e:
-                logger.error(f"Error closing connection: {e}")
+    def __del__(self):
+        """Defensive fallback - release lock if close() was never called"""
+        try:
+            self._release_lock()
+        except Exception:
+            pass
     
     def _initialize_db(self):
         """Initialize DuckDB connection and create tables"""
@@ -196,6 +227,7 @@ class TrackingDatabase:
                 semiquant.get('method'),
                 semiquant.get('concentration'),
                 json.dumps(matches) if matches else None,
+                bool(matches),
                 timestamp
             ]
             logger.debug(f"Inserting screening_result: {insert_values}")
@@ -208,8 +240,8 @@ class TrackingDatabase:
                  mz_tolerance, rti_tolerance, filter_by_blanks,
                  rti_score, mz_score, fragments_score, spectral_similarity_score, 
                  isotopic_fit_score, molecular_formula_fit_score, ip_score, 
-                 semiquant_method, concentration, matches, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 semiquant_method, concentration, matches, is_detected, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, insert_values)
             self.conn.commit()
             logger.info(f"Saved screening result: sample {sample_id}, substance {substance_name}")
@@ -285,7 +317,8 @@ class TrackingDatabase:
                     scores.get('ip_score'),
                     semiquant.get('method'),
                     semiquant.get('concentration'),
-                    json.dumps(matches) if matches else None
+                    json.dumps(matches) if matches else None,
+                    bool(matches)
                 ]
                 logger.debug(f"Inserting screening_result (tracking): {insert_values}")
                 self.conn.execute("""
@@ -297,8 +330,8 @@ class TrackingDatabase:
                      mz_tolerance, rti_tolerance, filter_by_blanks,
                      rti_score, mz_score, fragments_score, spectral_similarity_score, 
                      isotopic_fit_score, molecular_formula_fit_score, ip_score, 
-                     semiquant_method, concentration, matches)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     semiquant_method, concentration, matches, is_detected)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, insert_values)
             self.conn.commit()
             self._export_to_parquet()
@@ -417,7 +450,7 @@ class TrackingDatabase:
                 COUNT(DISTINCT r.substance_name) as substances_screened,
                 COUNT(*) as total_results,
                 t.last_screened,
-                COUNT(CASE WHEN r.spectral_similarity_score > 0.7 THEN 1 END) as substances_detected
+                COUNT(CASE WHEN r.is_detected THEN 1 END) as substances_detected
             FROM screening_tracking t
             LEFT JOIN screening_results r ON t.sample_id = r.sample_id
             GROUP BY t.sample_id, t.short_name, t.last_screened
@@ -468,6 +501,10 @@ class TrackingDatabase:
                 logger.error(f"Error closing database connection: {e}")
                 # Force set to None even if close fails
                 self.conn = None
+        # Always release the cross-process lock, even if the connection
+        # was already None or failed to close, to avoid deadlocking other
+        # processes waiting on this database file.
+        self._release_lock()
 
 # Global instance
 tracking_db = None

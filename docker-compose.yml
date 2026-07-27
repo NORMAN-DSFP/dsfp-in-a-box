@@ -104,6 +104,25 @@ services:
     volumes:
       - appdata:/data
 
+  models-parse:
+    image: dsfp-in-a-box-models-parse:latest
+    build:
+      context: ./models
+      dockerfile: parse/Dockerfile
+    profiles: ["build-only"]  # Image-only service; jobs run as ephemeral containers
+
+  models-componentize:
+    image: dsfp-in-a-box-models-componentize:latest
+    build:
+      context: ./models/componentize
+    profiles: ["build-only"]  # Image-only service; jobs run as ephemeral containers
+
+  models-jsoncreate:
+    image: dsfp-in-a-box-models-jsoncreate:latest
+    build: ./models/jsoncreate
+    profiles: ["build-only"]  # Image-only service; jobs run as ephemeral containers
+
+
   data-loader:
     build: ./data-loader
     container_name: dsfp-data-loader

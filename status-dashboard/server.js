@@ -6,6 +6,7 @@ const multer = require('multer');
 const fs = require('fs');
 const StreamZip = require('node-stream-zip');
 const axios = require('axios');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
 const app = express();
 const PORT = process.env.STATUS_DASHBOARD_PORT || 3008;
@@ -14,7 +15,27 @@ const docker = new Docker();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+
+// Disable caching for DSFP API routes to avoid browser 304 responses
+app.use('/api/dsfp', (req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+    next();
+});
+app.use((req, res, next) => {
+    if (req.path.endsWith('.html')) {
+        return res.redirect(301, req.path.slice(0, -5) || '/');
+    }
+
+    next();
+});
+app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+
+app.get('/header', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'header.html'));
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -81,6 +102,23 @@ function getHostDataPath() {
     // Not in Docker, return the actual path with native separators
     return containerDataPath;
 }
+
+// Discover the actual host path mounted at /app/data in the status-dashboard
+// container. This is the path Docker on the host can bind into the one-off
+// processing containers.
+async function getProcessingHostDataPath() {
+    try {
+        const container = docker.getContainer('status-dashboard');
+        const info = await container.inspect();
+        const mount = (info.Mounts || []).find(m => m.Destination === '/app/data');
+        if (mount && mount.Source) {
+            return mount.Source;
+        }
+    } catch (error) {
+        console.warn('Could not inspect status-dashboard mount for /app/data:', error.message);
+    }
+    return getHostDataPath();
+}
 const SCREENING_INDEX = 'dsfp-screening-index';
 // Note: TRACKING_INDEX removed - now using DuckDB for tracking
 
@@ -106,6 +144,31 @@ async function createIndexIfNotExists(indexName, mappings = null) {
             console.error(`Error checking index ${indexName}:`, error.message);
             return false;
         }
+    }
+}
+
+async function ensureScreeningIndex() {
+    const mappingsPath = '/app/setup/mappings.json';
+    if (!fs.existsSync(mappingsPath)) {
+        const fallbackPath = path.join(__dirname, '..', 'setup', 'mappings.json');
+        if (!fs.existsSync(fallbackPath)) {
+            throw new Error(`Mappings file not found at: ${mappingsPath} or ${fallbackPath}`);
+        }
+
+        const screeningMappings = JSON.parse(fs.readFileSync(fallbackPath, 'utf8'));
+        return createIndexIfNotExists(SCREENING_INDEX, screeningMappings);
+    }
+
+    const screeningMappings = JSON.parse(fs.readFileSync(mappingsPath, 'utf8'));
+    return createIndexIfNotExists(SCREENING_INDEX, screeningMappings);
+}
+
+async function isSamplePrepared(sampleId) {
+    try {
+        const response = await axios.head(`${ELASTICSEARCH_URL}/${SCREENING_INDEX}/_doc/${sampleId}`, { validateStatus: () => true });
+        return response.status === 200;
+    } catch (error) {
+        return false;
     }
 }
 
@@ -198,8 +261,14 @@ async function insertDocumentsOneByOne(documents, indexName) {
     
     for (const doc of documents) {
         try {
-            const response = await axios.post(`${ELASTICSEARCH_URL}/${indexName}/_doc/${doc._id || ''}`, 
-                doc.data || doc,
+            const documentId = doc._id ?? doc?.data?.sample_id ?? doc?.sample_id;
+            if (documentId === undefined || documentId === null || documentId === '') {
+                throw new Error('Missing document id for screening index insert');
+            }
+
+            const documentBody = doc.data || doc;
+            const response = await axios.put(`${ELASTICSEARCH_URL}/${indexName}/_doc/${encodeURIComponent(String(documentId))}`, 
+                documentBody,
                 {
                     headers: {
                         'Content-Type': 'application/json'
@@ -216,7 +285,8 @@ async function insertDocumentsOneByOne(documents, indexName) {
             
         } catch (error) {
             // Log detailed error information
-            console.error(`Error inserting document ${doc._id}:`);
+            const documentId = doc._id ?? doc?.data?.sample_id ?? doc?.sample_id ?? 'unknown';
+            console.error(`Error inserting document ${documentId}:`);
             console.error('  Message:', error.message);
             if (error.response) {
                 console.error('  Status:', error.response.status);
@@ -224,7 +294,7 @@ async function insertDocumentsOneByOne(documents, indexName) {
             }
             
             const errorDetail = error.response?.data?.error || error.message;
-            errors.push({ id: doc._id, error: errorDetail });
+            errors.push({ id: documentId, error: errorDetail });
         }
     }
     
@@ -299,9 +369,11 @@ app.get('/api/containers', async (req, res) => {
     try {
         const containers = await docker.listContainers({ all: true });
         
-        // Filter to only show DSFP-related containers
+        // Filter to only show DSFP-related containers (excluding ephemeral job containers)
         const dsfpContainers = containers.filter(container => {
             const name = container.Names[0].replace('/', '');
+            // Exclude ephemeral job containers (dsfp-job-*)
+            if (name.startsWith('dsfp-job-')) return false;
             return (name.startsWith('dsfp-') || 
                    name.includes('dsfp-in-a-box') || 
                    name === 'elasticsearch') &&
@@ -329,7 +401,7 @@ app.get('/api/containers', async (req, res) => {
                 status: container.Status,
                 isRunning: isRunning,
                 serviceType: serviceType,
-                ports: container.Ports.map(port => ({
+                ports: (container.Ports || []).map(port => ({
                     privatePort: port.PrivatePort,
                     publicPort: port.PublicPort,
                     type: port.Type
@@ -1230,7 +1302,7 @@ try:
             'last_processed': row[1] if row[1] else None
         }
     
-    conn.close()
+    db.close()
     print(json.dumps(tracking_data))
 
 except Exception as e:
@@ -1336,7 +1408,7 @@ try:
     """, ["${sample_id}"])
     
     conn.commit()
-    conn.close()
+    db.close()
     
     print("SUCCESS: Status updated in DuckDB")
     
@@ -1454,7 +1526,7 @@ try:
     results_count = conn.execute("SELECT COUNT(*) FROM screening_results").fetchone()[0]
     tracking_count = conn.execute("SELECT COUNT(*) FROM screening_tracking").fetchone()[0]
     
-    conn.close()
+    db.close()
     
     print(f"SUCCESS: Database cleared. Results: {results_count}, Tracking: {tracking_count}")
     
@@ -1550,7 +1622,7 @@ try:
         }
     }
     
-    conn.close();
+    db.close();
     
     print(json.dumps(schema_info, indent=2, default=str))
 
@@ -1653,7 +1725,7 @@ try:
     SELECT sr.sample_id,
            COUNT(DISTINCT sr.substance_name) as substances_screened,
            COUNT(*) as total_results,
-           COUNT(CASE WHEN sr.spectral_similarity_score > 0.7 THEN 1 END) as detected,
+           COUNT(CASE WHEN sr.is_detected THEN 1 END) as detected,
            MAX(sr.created_at) as last_screened
     FROM screening_results sr
     GROUP BY sr.sample_id
@@ -1705,7 +1777,7 @@ try:
                 'total_substances': ${totalSubstances}
             })
     
-    conn.close()
+    db.close()
     
     # Output only clean JSON, no other print statements
     print(json.dumps(files_data))
@@ -1995,16 +2067,6 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Serve the data loader page
-app.get('/data-loader.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'data-loader.html'));
-});
-
-// Serve the screening page
-app.get('/screening.html', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'screening.html'));
-});
-
 // Serve data directory files (for inspection/download)
 app.get('/api/data/*', (req, res) => {
     const requestedPath = req.params[0];
@@ -2219,7 +2281,7 @@ try:
     conn.execute("DELETE FROM screening_results")
     conn.execute("DELETE FROM screening_tracking")
     conn.commit()
-    conn.close()
+    db.close()
     print("SUCCESS: DuckDB cleared")
 except Exception as e:
     print(f"ERROR: {str(e)}")
@@ -2593,12 +2655,21 @@ app.get('/api/compounds/all', async (req, res) => {
 // API endpoint to get detections from screening_results table
 app.get('/api/detections', async (req, res) => {
     try {
-        const { sample_id } = req.query;
+        const { sample_id, detected } = req.query;
         
         const { spawn } = require('child_process');
         
-        // Build the query based on whether we're filtering by sample_id
-        const whereClause = sample_id ? `WHERE sample_id = '${sample_id}'` : '';
+        // Build the query based on whether we're filtering by sample_id and/or detection status
+        const whereClauses = [];
+        if (sample_id) {
+            whereClauses.push(`sample_id = '${sample_id}'`);
+        }
+        if (detected === 'true') {
+            whereClauses.push('is_detected = TRUE');
+        } else if (detected === 'false') {
+            whereClauses.push('is_detected = FALSE');
+        }
+        const whereClause = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
         
         const pythonScript = `
 import sys
@@ -2632,10 +2703,11 @@ try:
             rti_tolerance,
             filter_by_blanks,
             matches,
+            is_detected,
             created_at
         FROM screening_results
         ${whereClause}
-        ORDER BY spectral_similarity_score DESC, sample_id, substance_name
+        ORDER BY is_detected DESC, spectral_similarity_score DESC, sample_id, substance_name
         """
         
         results = conn.execute(query).fetchall()
@@ -2662,7 +2734,8 @@ try:
                 'rti_tolerance': float(row[16]) if row[16] is not None else None,
                 'filter_by_blanks': bool(row[17]) if row[17] is not None else None,
                 'matches': json.loads(row[18]) if row[18] is not None else [],
-                'created_at': str(row[19]) if row[19] is not None else None
+                'is_detected': bool(row[19]) if row[19] is not None else False,
+                'created_at': str(row[20]) if row[20] is not None else None
             })
         
         print(json.dumps({
@@ -2814,6 +2887,2079 @@ except Exception as e:
             success: false,
             error: error.message
         });
+    }
+});
+
+// ============================================================================
+// Venthic Webform API proxy (bulk sample import to the DSFP live site)
+// ----------------------------------------------------------------------------
+// These endpoints act as a thin server-side proxy so the browser never has to
+// deal with CORS or hold the live-site credentials. Authentication is handled
+// by a dashboard-wide OAuth session (see /api/dsfp/* below) which obtains a
+// Bearer token from the DSFP /oauth/token endpoint and refreshes it on demand.
+// ============================================================================
+
+// In-memory multer instance for forwarding uploaded sample files to the live API.
+const webformUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024 * 1024, // 5GB per file
+        files: 50
+    }
+});
+
+// ---------------------------------------------------------------------------
+// DSFP OAuth session (single in-memory session, single-user "in a box" model)
+// ---------------------------------------------------------------------------
+// Pre-configured defaults can be provided via environment variables. Only the
+// presence of a default client_id / client_secret is exposed to the browser,
+// never their values.
+// Fixed DSFP site configuration — override via env vars only if needed.
+const DSFP_BASE_URL = process.env.DSFP_BASE_URL || 'https://dsfp.norman-data.eu';
+const DSFP_CLIENT_ID = process.env.DSFP_CLIENT_ID || 'C0dYu44lrBHNjzyKJMldO8liw-ZUyzunReGL-Rrku0g';
+const DSFP_CLIENT_SECRET = process.env.DSFP_CLIENT_SECRET || 'dsfp_box';
+
+// dsfpSession: null when logged out, otherwise:
+//   { baseUrl, username, password, clientId, clientSecret, token, expiresAt }
+// password / client_secret are kept in memory only so the token can be silently
+// refreshed when it expires (password grant has no refresh token).
+let dsfpSession = null;
+
+// Normalise a base URL (strip trailing slashes).
+function normalizeBaseUrl(baseUrl) {
+    if (!baseUrl || typeof baseUrl !== 'string') return '';
+    return baseUrl.trim().replace(/\/+$/, '');
+}
+
+// Obtain a Bearer token from /oauth/token using the password grant.
+async function obtainDsfpToken({ baseUrl, username, password, clientId, clientSecret }) {
+    const url = `${baseUrl}/oauth/token`;
+    const body = new URLSearchParams({
+        grant_type: 'password',
+        username,
+        password,
+        client_id: clientId,
+        client_secret: clientSecret
+    });
+    const response = await axios.post(url, body.toString(), {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+            'User-Agent': 'DSFP-Dashboard/1.0'
+        },
+        validateStatus: () => true,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        timeout: 30000
+    });
+
+    if (response.status !== 200 || !response.data || !response.data.access_token) {
+        const message = (response.data && (response.data.message || response.data.error_description ||
+            response.data.error)) || `HTTP ${response.status}`;
+        const err = new Error(message);
+        err.status = response.status;
+        err.body = response.data;
+        throw err;
+    }
+
+    const expiresInMs = (Number(response.data.expires_in) || 3600) * 1000;
+    // Apply a 60s safety buffer so we refresh just before the upstream considers
+    // the token expired.
+    return {
+        token: response.data.access_token,
+        expiresAt: Date.now() + expiresInMs - 60_000
+    };
+}
+
+// Obtain a Drupal session cookie + CSRF token via /user/login?_format=json.
+// Required for routes where the _auth option excludes OAuth2 (e.g. webform submit).
+async function obtainDsfpSessionCookie(username, password) {
+    const loginUrl = `${DSFP_BASE_URL}/user/login?_format=json`;
+    const loginResp = await axios.post(loginUrl, { name: username, pass: password }, {
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+        },
+        validateStatus: () => true,
+        maxRedirects: 0,
+        timeout: 30000
+    });
+    if (loginResp.status < 200 || loginResp.status >= 400) {
+        throw new Error(`Drupal session login failed: HTTP ${loginResp.status}`);
+    }
+    const setCookie = loginResp.headers['set-cookie'] || [];
+    const cookies = setCookie.map(c => c.split(';')[0]).filter(Boolean).join('; ');
+    let csrfToken = (loginResp.data && loginResp.data.csrf_token) || '';
+    if (!csrfToken) {
+        const tokenResp = await axios.get(`${DSFP_BASE_URL}/session/token`, {
+            headers: { 'Cookie': cookies, 'User-Agent': 'DSFP-Dashboard-Importer/1.0' },
+            validateStatus: () => true, timeout: 15000
+        });
+        csrfToken = tokenResp.status === 200 ? String(tokenResp.data || '').trim() : '';
+    }
+    return { cookies, csrfToken };
+}
+
+// Return { cookies, csrfToken } for the current session, refreshing if absent.
+async function getValidDsfpSession() {
+    if (!dsfpSession) {
+        const err = new Error('Not logged in to DSFP'); err.status = 401; throw err;
+    }
+    if (!dsfpSession.sessionCookies) {
+        const s = await obtainDsfpSessionCookie(dsfpSession.username, dsfpSession.password);
+        dsfpSession.sessionCookies = s.cookies;
+        dsfpSession.csrfToken = s.csrfToken;
+    }
+    return { cookies: dsfpSession.sessionCookies, csrfToken: dsfpSession.csrfToken };
+}
+
+// Return a non-expired Bearer token for the current session, refreshing it
+// transparently via the password grant when needed.
+async function getValidDsfpToken() {
+    if (!dsfpSession) {
+        const err = new Error('Not logged in to DSFP');
+        err.status = 401;
+        throw err;
+    }
+    if (Date.now() >= dsfpSession.expiresAt) {
+        const fresh = await obtainDsfpToken(dsfpSession);
+        dsfpSession.token = fresh.token;
+        dsfpSession.expiresAt = fresh.expiresAt;
+    }
+    return dsfpSession.token;
+}
+
+// POST /api/dsfp/login — exchange username+password for a Bearer token.
+// The DSFP base URL and OAuth client credentials are hardcoded server-side;
+// callers only need to supply the user's own username and password.
+app.post('/api/dsfp/login', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const username = (body.username || '').trim();
+        const password = body.password || '';
+
+        if (!username || !password) {
+            return res.status(400).json({
+                success: false,
+                error: 'username and password are required'
+            });
+        }
+
+        const { token, expiresAt } = await obtainDsfpToken({
+            baseUrl: DSFP_BASE_URL,
+            username,
+            password,
+            clientId: DSFP_CLIENT_ID,
+            clientSecret: DSFP_CLIENT_SECRET
+        });
+
+        // Fetch uid + roles so the UI knows whether the user is an admin.
+        let uid = null;
+        let isAdmin = false;
+        try {
+            const meResp = await fetch(
+                `${DSFP_BASE_URL}/jsonapi/user/user?filter[name][value]=${encodeURIComponent(username)}&include=roles&page[limit]=1`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/vnd.api+json',
+                        'User-Agent': 'DSFP-Dashboard/1.0'
+                    }
+                }
+            );
+            if (meResp.ok) {
+                const meData = await meResp.json();
+                const meUser = Array.isArray(meData.data) ? meData.data[0] : meData.data;
+                uid = meUser?.attributes?.drupal_internal__uid ?? null;
+                const includedRoles = Array.isArray(meData.included) ? meData.included : [];
+                isAdmin = includedRoles.some(role =>
+                    role?.type?.includes('user_role') && (
+                        role?.attributes?.drupal_internal__id === 'administrator' ||
+                        role?.attributes?.label === 'administrator'
+                    )
+                );
+                if (!isAdmin) {
+                    const roleRefs = meUser?.relationships?.roles?.data || [];
+                    isAdmin = roleRefs.some(r =>
+                        r?.id === 'administrator' ||
+                        r?.meta?.drupal_internal__target_id === 'administrator'
+                    );
+                }
+            }
+        } catch (e) {
+            console.warn('[dsfp-login] could not fetch user info:', e.message);
+        }
+
+        dsfpSession = {
+            baseUrl: DSFP_BASE_URL,
+            username,
+            password,
+            clientId: DSFP_CLIENT_ID,
+            clientSecret: DSFP_CLIENT_SECRET,
+            token,
+            expiresAt,
+            uid,
+            isAdmin,
+            // Session cookie for routes that disallow Bearer auth.
+            sessionCookies: null,
+            csrfToken: null
+        };
+
+        // Obtain a session cookie in parallel — /api/webform/submit only
+        // accepts Drupal cookie auth, not OAuth Bearer.
+        obtainDsfpSessionCookie(username, password).then(({ cookies, csrfToken }) => {
+            if (dsfpSession) {
+                dsfpSession.sessionCookies = cookies;
+                dsfpSession.csrfToken = csrfToken;
+            }
+        }).catch(e => console.warn('[dsfp-login] session cookie failed:', e.message));
+
+        return res.json({ success: true, username, baseUrl: DSFP_BASE_URL, expiresAt });
+    } catch (error) {
+        console.error('DSFP login failed:', error.message);
+        return res.status(error.status && error.status < 500 ? error.status : 502).json({
+            success: false,
+            error: error.message,
+            body: error.body
+        });
+    }
+});
+
+// POST /api/dsfp/logout — discard the in-memory session.
+app.post('/api/dsfp/logout', (req, res) => {
+    dsfpSession = null;
+    res.json({ success: true });
+});
+
+// GET /api/dsfp/status — minimal session info for the UI.
+app.get('/api/dsfp/status', (req, res) => {
+    res.json({
+        loggedIn: !!dsfpSession,
+        username: dsfpSession ? dsfpSession.username : null,
+        baseUrl: DSFP_BASE_URL,
+        expiresAt: dsfpSession ? dsfpSession.expiresAt : null,
+        uid: dsfpSession ? (dsfpSession.uid ?? null) : null,
+        isAdmin: dsfpSession ? (dsfpSession.isAdmin || false) : false
+    });
+});
+
+// GET /api/dsfp/users?q=<query> — search DSFP users by name (admin only).
+app.get('/api/dsfp/users', async (req, res) => {
+    if (!dsfpSession) return res.status(401).json({ error: 'Not logged in' });
+    if (!dsfpSession.isAdmin) return res.status(403).json({ error: 'Admin only' });
+    const q = (req.query.q || '').trim();
+    if (q.length < 2) return res.json([]);
+    try {
+        const token = await getValidDsfpToken();
+        const url = `${DSFP_BASE_URL}/jsonapi/user/user` +
+            `?filter[name][operator]=CONTAINS&filter[name][value]=${encodeURIComponent(q)}` +
+            `&page[limit]=15&sort=name`;
+        const r = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.api+json' }
+        });
+        const data = await r.json();
+        const users = (data.data || []).map(u => ({
+            uid:  u.attributes?.drupal_internal__uid,
+            uuid: u.id,
+            name: u.attributes?.name
+        }));
+        return res.json(users);
+    } catch (e) {
+        console.error('[api/dsfp/users] error:', e.message);
+        return res.status(502).json({ error: e.message });
+    }
+});
+
+// Helper: convert an axios/fetch upstream 401 into a session-invalidating
+// JSON response so the browser can prompt for re-login.
+function unauthorizedResponse(res, message) {
+    dsfpSession = null;
+    return res.status(401).json({
+        success: false,
+        loggedIn: false,
+        error: message || 'Not logged in to DSFP'
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Webform schema helpers
+// ---------------------------------------------------------------------------
+
+// Parse Drupal webform elements YAML into our {matrixOptions,envOptions,fields}
+// structure without requiring an external YAML parser. The format is predictable
+// enough to handle with line-by-line analysis.
+function parseWebformElementsYaml(yaml) {
+    // Element types that are structural containers — we recurse into them
+    // and inherit their visibility conditions downward to child fields.
+    const CONTAINER_TYPES = new Set([
+        'webform_wizard_page', 'fieldset', 'webform_section', 'container',
+        'details', 'webform_flexbox', 'webform_flexbox_item',
+        'webform_table', 'webform_table_row', 'webform_table_sort',
+        'webform_actions', 'webform_custom_composite'
+    ]);
+    // Types that produce no user-facing field column.
+    const SKIP_TYPES = new Set([
+        'webform_markup', 'processed_text', 'webform_message',
+        'webform_horizontal_rule', 'label', 'hidden', 'value',
+        'managed_file', 'webform_document_file', 'webform_image_file',
+        'webform_audio_file', 'webform_video_file', 'webform_computed_twig'
+    ]);
+
+    // ---- Pass 1: parse the YAML into a nested JS object ------------------
+    // Lightweight parser that handles Drupal webform element YAML:
+    // quoted/unquoted scalars, nested mappings of arbitrary depth, blank lines.
+    function stripQ(s) { return (s || '').trim().replace(/^['"]|['"]$/g, '').trim(); }
+
+    // Locate the key:value separator on a YAML line. Naive indexOf(':') breaks
+    // when the key is a quoted string that itself contains colons — e.g. the
+    // webform #states selector ':input[name="matrix"]': has a colon at offset 1.
+    // Walk past the quoted region first, then find the next ':'.
+    function findKeyColon(s) {
+        const q = s[0];
+        if (q === '"' || q === "'") {
+            const close = s.indexOf(q, 1);
+            if (close === -1) return s.indexOf(':');
+            const c = s.indexOf(':', close + 1);
+            return c;
+        }
+        return s.indexOf(':');
+    }
+
+    function parseBlock(lines, baseIndent) {
+        const obj = {};
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            if (!line.trim()) { i++; continue; }
+            const indent = line.search(/\S/);
+            if (indent < baseIndent) break;
+            if (indent !== baseIndent) { i++; continue; }
+
+            const trimmed = line.trim();
+            const colonIdx = findKeyColon(trimmed);
+            if (colonIdx === -1) { i++; continue; }
+
+            const key = stripQ(trimmed.slice(0, colonIdx));
+            const val = stripQ(trimmed.slice(colonIdx + 1));
+
+            // Collect all child lines (indent strictly > baseIndent).
+            const childLines = [];
+            let childIndent = -1;
+            let j = i + 1;
+            while (j < lines.length) {
+                const cl = lines[j];
+                if (!cl.trim()) { childLines.push(cl); j++; continue; }
+                const ci = cl.search(/\S/);
+                if (ci <= baseIndent) break;
+                if (childIndent === -1) childIndent = ci;
+                childLines.push(cl);
+                j++;
+            }
+
+            if (childIndent > baseIndent) {
+                obj[key] = parseBlock(childLines, childIndent);
+                i = j;
+            } else {
+                obj[key] = val;
+                i = j > i ? j : i + 1;
+            }
+        }
+        return obj;
+    }
+
+    // Find the base indent of the first non-empty line.
+    let baseIndent = 0;
+    for (const line of yaml.split('\n')) {
+        if (line.trim()) { baseIndent = line.search(/\S/); break; }
+    }
+    const tree = parseBlock(yaml.split('\n'), baseIndent);
+
+    // ---- Pass 2: walk the object tree, collecting fields with conditions --
+    const matrixOptions = [];   // [{value, label}]
+    const envOptions = [];      // [{value, label}]
+    const fields = [];
+    let envMatrixKey = null;    // the matrix #options key under which env_monitoring is nested
+
+    // Convert a Drupal #options object to [{value,label}] preserving order.
+    function optionPairs(optsObj) {
+        if (!optsObj || typeof optsObj !== 'object') return [];
+        return Object.entries(optsObj).map(([k, v]) => ({
+            value: k,
+            label: (typeof v === 'string' && v) ? v : k
+        }));
+    }
+
+    // Extract the most specific visible-when condition from a #states object.
+    // Prefers env_monitoring over matrix (env is the more specific selector).
+    //
+    // Real selectors in the DSFP webform look like:
+    //   ':input[name="matrix[select]"]'              (webform_options_custom:buttons)
+    //   ':input[name="env_monitoring[select]"]'      (same widget)
+    //   ':input[name="monitoring_scale"]'            (plain widget)
+    // We extract the base field name (before any `[…]` suffix) so all of these
+    // collapse back to `matrix`, `env_monitoring`, `monitoring_scale`, etc.
+    function extractCond(statesObj) {
+        if (!statesObj || typeof statesObj !== 'object') return null;
+        const visible = statesObj.visible;
+        if (!visible || typeof visible !== 'object') return null;
+
+        let matrixCond = null, envCond = null;
+        for (const [selector, condition] of Object.entries(visible)) {
+            // Allow `[` inside the captured run, then strip any `[…]` suffix.
+            const m = selector.match(/name=["']?([A-Za-z0-9_\-\[\]]+)["']?\]/);
+            if (!m) continue;
+            const fn = m[1].replace(/\[[^\]]*\]$/, '');   // matrix[select] -> matrix
+            let v = null;
+            if (condition && typeof condition === 'object') {
+                v = String(condition.value != null ? condition.value :
+                           condition.checked != null ? condition.checked : '');
+            } else if (typeof condition === 'string') {
+                v = condition;
+            }
+            if (!v) continue;
+            if (fn === 'env_monitoring') envCond = { parent: 'env_monitoring', value: v };
+            else if (fn === 'matrix')    matrixCond = { parent: 'matrix', value: v };
+        }
+        return envCond || matrixCond || null;
+    }
+
+    function walk(obj, inheritedCond) {
+        for (const [name, value] of Object.entries(obj)) {
+            // Skip YAML properties (#type, #title…) and scalar leaves.
+            if (name.startsWith('#') || typeof value !== 'object') continue;
+
+            const type  = String(value['#type']  || '');
+            const label = String(value['#title'] || name);
+            const required = value['#required'] === 'true' || value['#required'] === true;
+
+            // This element's own #states overrides the inherited condition.
+            const cond = extractCond(value['#states']) || inheritedCond;
+
+            // Collect matrix / env_monitoring options as we encounter them.
+            if (name === 'matrix') {
+                optionPairs(value['#options']).forEach(opt => {
+                    if (!matrixOptions.find(o => o.value === opt.value)) matrixOptions.push(opt);
+                });
+                // matrix itself is not a column — keep recursing to pick up siblings.
+                continue;
+            }
+            if (name === 'env_monitoring') {
+                optionPairs(value['#options']).forEach(opt => {
+                    if (!envOptions.find(o => o.value === opt.value)) envOptions.push(opt);
+                });
+                // Record which matrix value reveals env_monitoring — typically env_monitoring
+                // is nested inside a section whose #states.visible binds matrix to one value.
+                if (cond && cond.parent === 'matrix' && !envMatrixKey) envMatrixKey = cond.value;
+                continue;
+            }
+
+            // Pure cosmetic / file-upload fields — skip entirely.
+            if (SKIP_TYPES.has(type)) continue;
+
+            // Container: recurse, passing the resolved condition downward so that
+            // nested fields inherit the section's visibility constraint.
+            if (CONTAINER_TYPES.has(type) || type === '') {
+                walk(value, cond);
+                continue;
+            }
+
+            // Leaf input field — extract options if any.
+            const options = optionPairs(value['#options']);
+
+            // Determine group from the resolved condition.
+            let group = 'common';
+            if (cond) {
+                group = (cond.parent === 'env_monitoring' ? 'env:' : 'matrix:') + cond.value;
+            }
+
+            // Helper: coerce a YAML scalar (string after stripQ) to a number when sensible.
+            const num = v => {
+                if (v === undefined || v === null || v === '') return undefined;
+                const n = Number(v);
+                return Number.isFinite(n) ? n : undefined;
+            };
+            const str = v => (v === undefined || v === null || v === '') ? undefined : String(v);
+
+            // Entity-reference / taxonomy autocomplete metadata. Drupal stores the
+            // target entity type at #target_type and the allowed bundles at
+            // #selection_settings.target_bundles (an object whose KEYS are bundle
+            // machine names — we treat the keys as the bundle list).
+            let targetType = null, targetBundles = null;
+            if (type === 'entity_autocomplete' || type === 'webform_entity_select' ||
+                type === 'webform_entity_checkboxes' || type === 'webform_entity_radios' ||
+                type === 'webform_term_select' || type === 'webform_term_checkboxes') {
+                targetType = str(value['#target_type']) || null;
+                const sel = value['#selection_settings'];
+                if (sel && typeof sel === 'object') {
+                    const tb = sel.target_bundles;
+                    if (tb && typeof tb === 'object') {
+                        targetBundles = Object.keys(tb).filter(k => k && !k.startsWith('#'));
+                    } else if (typeof tb === 'string' && tb) {
+                        targetBundles = [tb];
+                    }
+                }
+                // webform_term_* shortcuts: vocabulary is given by #vocabulary.
+                if (!targetType && (type === 'webform_term_select' || type === 'webform_term_checkboxes')) {
+                    targetType = 'taxonomy_term';
+                }
+                if (!targetBundles && value['#vocabulary']) {
+                    targetBundles = [str(value['#vocabulary'])];
+                }
+            }
+
+            fields.push({
+                name, label, required, type,
+                options: options.length ? options : null,
+                group,
+                description: str(value['#description']),
+                min:        num(value['#min']),
+                max:        num(value['#max']),
+                step:       num(value['#step']),
+                minlength:  num(value['#minlength']),
+                maxlength:  num(value['#maxlength']),
+                pattern:        str(value['#pattern']),
+                patternError:   str(value['#pattern_error']),
+                multiple:   value['#multiple'] === 'true' || value['#multiple'] === true,
+                targetType,
+                targetBundles,
+                conditionParent: cond ? cond.parent : null,
+                conditionValue:  cond ? cond.value  : null
+            });
+        }
+    }
+
+    walk(tree, null);
+
+    // Diagnostic: dump field-group breakdown so we can spot parser regressions
+    // (e.g. mis-detected #states) from the container logs.
+    const byGroup = fields.reduce((m, f) => { m[f.group] = (m[f.group] || 0) + 1; return m; }, {});
+    console.log('[webform-schema] groups:', byGroup,
+        'matrixOptions:', matrixOptions.map(o => o.value),
+        'envOptions:', envOptions.map(o => o.value),
+        'envMatrixKey:', envMatrixKey);
+
+    return { matrixOptions, envOptions, envMatrixKey, fields };
+}
+
+// Convert a JSON Schema (from webform_jsonschema) into the same structure.
+function jsonSchemaToInternalSchema(doc) {
+    const props = (doc && (doc.properties || (doc.schema && doc.schema.properties))) || {};
+    const requiredList = (doc && doc.required) || [];
+    const out = { matrixOptions: [], envOptions: [], envMatrixKey: null, fields: [] };
+
+    const toPairs = arr => (arr || []).map(v => ({ value: v, label: v }));
+
+    Object.keys(props).forEach(name => {
+        const p = props[name] || {};
+        const label = p.title || p.label || name;
+        const enumVals = p.enum || (p.items && p.items.enum) || null;
+
+        if (name === 'matrix') { out.matrixOptions = toPairs(enumVals); return; }
+        if (name === 'env_monitoring') { out.envOptions = toPairs(enumVals); return; }
+
+        out.fields.push({
+            name,
+            label,
+            required: requiredList.includes(name),
+            type: p.type === 'string' && p.format === 'date' ? 'date'
+                : p.type === 'number' || p.type === 'integer' ? 'number'
+                : 'textfield',
+            options: enumVals ? toPairs(enumVals) : null,
+            group: 'common',
+            description: p.description,
+            min: p.minimum,
+            max: p.maximum,
+            minlength: p.minLength,
+            maxlength: p.maxLength,
+            pattern: p.pattern,
+            patternError: undefined,
+            step: undefined,
+            multiple: p.type === 'array'
+        });
+    });
+    return out;
+}
+
+// Fetch the webform schema via two strategies:
+//   1. JSON:API with Bearer token (GET /jsonapi/webform/webform/{id})
+//   2. webform_jsonschema with NO Authorization header (route only allows cookie auth —
+//      sending ANY credential header triggers Drupal's AccessDeniedException)
+app.post('/api/webform/schema', async (req, res) => {
+    const webformId = (req.body && req.body.webformId) || 'sample';
+    const errors = [];
+
+    // --- Strategy 1: JSON:API with Bearer token ----------------------------
+    // JSON:API requires the entity UUID, not the machine name. We query the
+    // collection endpoint filtered by drupal_internal__id to find the webform,
+    // which also returns all attributes (including elements YAML) in one request.
+    if (dsfpSession) {
+        try {
+            const token = await getValidDsfpToken();
+            const url = `${DSFP_BASE_URL}/jsonapi/webform/webform` +
+                `?filter[drupal_internal__id]=${encodeURIComponent(webformId)}` +
+                `&fields[webform--webform]=drupal_internal__id,elements`;
+            const r = await axios.get(url, {
+                headers: {
+                    'Accept': 'application/vnd.api+json',
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+                },
+                validateStatus: () => true,
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity
+            });
+
+            if (r.status === 401) {
+                dsfpSession = null;
+                return unauthorizedResponse(res, 'DSFP rejected the access token');
+            }
+
+            if (r.status === 200) {
+                // Collection response: data is an array.
+                const records = r.data && r.data.data;
+                const record = Array.isArray(records) ? records[0] : records;
+                const attrs = record && record.attributes;
+                const elementsYaml = attrs && (attrs.elements || attrs.element);
+                if (elementsYaml && typeof elementsYaml === 'string') {
+                    const schema = parseWebformElementsYaml(elementsYaml);
+                    console.log(`Webform schema via JSON:API: ${schema.fields.length} fields`);
+                    return res.json({ success: true, source: 'jsonapi', url, schema });
+                }
+                if (Array.isArray(records) && records.length === 0) {
+                    errors.push(`JSON:API: webform "${webformId}" not found (check machine name)`);
+                } else {
+                    errors.push(`JSON:API: HTTP ${r.status} — elements field missing or empty`);
+                }
+            } else {
+                errors.push(`JSON:API: HTTP ${r.status}`);
+            }
+        } catch (e) {
+            errors.push(`JSON:API: ${e.message}`);
+        }
+    } else {
+        errors.push('JSON:API: not logged in');
+    }
+
+    // --- Strategy 2: webform_jsonschema, NO Authorization header -----------
+    // The webform_jsonschema route only allows Drupal session-cookie auth. Sending
+    // ANY Authorization header (Basic or Bearer) causes AccessDeniedHttpException.
+    // Sending no header lets anonymous access work if the schema is public.
+    try {
+        const url = `${DSFP_BASE_URL}/webform_jsonschema/${webformId}`;
+        const r = await axios.get(url, {
+            headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+                // Intentionally NO Authorization header
+            },
+            validateStatus: () => true,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
+
+        if (r.status === 200) {
+            const schema = jsonSchemaToInternalSchema(r.data);
+            console.log(`Webform schema via webform_jsonschema (anon): ${schema.fields.length} fields`);
+            return res.json({ success: true, source: 'jsonschema', url, schema });
+        }
+        errors.push(`webform_jsonschema (anon): HTTP ${r.status}`);
+    } catch (e) {
+        errors.push(`webform_jsonschema (anon): ${e.message}`);
+    }
+
+    // Both strategies failed — tell the client so it can use its built-in schema.
+    console.warn('Could not fetch webform schema:', errors.join(' | '));
+    return res.status(200).json({
+        success: false,
+        error: 'Could not fetch live schema: ' + errors.join(' | ')
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Taxonomy autocomplete proxy
+// ---------------------------------------------------------------------------
+// Used by webform fields of #type entity_autocomplete / webform_term_select
+// whose #target_type is taxonomy_term. Returns up to 25 suggestions filtered
+// by name CONTAINS query, restricted to the given vocabularies.
+//
+//   GET /api/dsfp/taxonomy?vocab=v1,v2&q=foo
+//
+// Drupal JSON:API exposes terms at /jsonapi/taxonomy_term/{vocabulary}. We
+// query each requested vocabulary in parallel and merge the results.
+app.get('/api/dsfp/taxonomy', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const q = (req.query.q || '').toString().trim();
+    const vocabsRaw = (req.query.vocab || '').toString().trim();
+    if (!vocabsRaw) return res.json({ success: true, terms: [] });
+    const vocabs = vocabsRaw.split(',').map(s => s.trim()).filter(Boolean).slice(0, 5);
+
+    try {
+        const token = await getValidDsfpToken();
+        const perVocab = 25;
+
+        const fetchOne = async (vocab) => {
+            // Drupal vocabulary machine names use underscores in JSON:API URLs.
+            const safeVocab = encodeURIComponent(vocab.replace(/-/g, '_'));
+            const params = new URLSearchParams();
+            params.set('fields[taxonomy_term--' + vocab + ']', 'name,drupal_internal__tid');
+            params.set('page[limit]', String(perVocab));
+            params.set('sort', 'name');
+            if (q) {
+                params.set('filter[name-filter][condition][path]', 'name');
+                params.set('filter[name-filter][condition][operator]', 'CONTAINS');
+                params.set('filter[name-filter][condition][value]', q);
+            }
+            const url = `${DSFP_BASE_URL}/jsonapi/taxonomy_term/${safeVocab}?${params.toString()}`;
+            const r = await axios.get(url, {
+                headers: {
+                    'Accept': 'application/vnd.api+json',
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+                },
+                validateStatus: () => true
+            });
+            if (r.status === 401) { dsfpSession = null; throw new Error('unauthorized'); }
+            if (r.status !== 200) {
+                return { vocab, error: `HTTP ${r.status}`, terms: [] };
+            }
+            const items = (r.data && r.data.data) || [];
+            return {
+                vocab,
+                terms: items.map(t => ({
+                    id: t.id,
+                    tid: t.attributes && t.attributes.drupal_internal__tid,
+                    name: t.attributes && t.attributes.name,
+                    vocab
+                }))
+            };
+        };
+
+        const results = await Promise.all(vocabs.map(v => fetchOne(v).catch(e => ({
+            vocab: v, error: e.message, terms: []
+        }))));
+
+        const merged = [];
+        const seen = new Set();
+        for (const r of results) {
+            for (const t of r.terms) {
+                const k = (t.vocab || '') + '::' + (t.name || '');
+                if (!seen.has(k)) { seen.add(k); merged.push(t); }
+            }
+        }
+        res.json({
+            success: true,
+            terms: merged.slice(0, 25),
+            vocabs: results.map(r => ({ vocab: r.vocab, count: r.terms.length, error: r.error || null }))
+        });
+    } catch (e) {
+        if (e.message === 'unauthorized') {
+            return unauthorizedResponse(res, 'DSFP rejected the access token');
+        }
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Collections + instrument setups (for the Sample Import screen)
+// ---------------------------------------------------------------------------
+// The DSFP "collection" field on the sample webform is an entity_autocomplete
+// pointing at nodes of bundle `data` (DKAN datasets). The "instrument_setup"
+// field is a view-restricted entity reference whose allowed options are the
+// instrument setups attached to the *source* collection — DSFP publishes the
+// machine-readable list as `/data/{nid}/instrument-setups.csv`.
+
+// GET /api/dsfp/collections
+//   List `data` nodes (collections) authored by the currently logged-in user.
+// GET /api/dsfp/collections
+//   Returns the high-level DKAN datasets authored by the currently logged-in
+//   user. Other `node/data` bundle entries (keywords, themes, distributions
+//   etc.) are excluded by intersecting the user's authored data nodes with
+//   the canonical dataset list from DKAN metastore.
+app.get('/api/dsfp/collections', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    try {
+        const token = await getValidDsfpToken();
+
+        // (1) The site's `node/data` records (gives us nid + uuid + title).
+        // Show collections for all users (no author filter) and request
+        // a large page size since the site is small in practice.
+        const jsonApiParams = new URLSearchParams();
+        jsonApiParams.set('page[limit]', '100000');
+        jsonApiParams.set('sort', '-created');
+        const jsonApiUrl = `${DSFP_BASE_URL}/jsonapi/node/data?${jsonApiParams.toString()}`;
+
+        // (2) The DKAN metastore dataset list (canonical "high-level datasets",
+        // excludes keyword / theme / distribution entities that share the
+        // `data` bundle). This endpoint is public; no Bearer required.
+        // Prefer the `/all` metastore endpoint (contains title/uuid/nid),
+        // fall back to `/items` if unavailable.
+        const dkanUrls = [
+            `${DSFP_BASE_URL}/api/1/metastore/schemas/dataset/all`,
+            `${DSFP_BASE_URL}/api/1/metastore/schemas/dataset/items`
+        ];
+
+        // Try the metastore `/all` endpoint first — it contains title, UUID
+        // and internal IDs. If it returns items, use that as the authoritative
+        // collections list (faster and avoids heavy JSON:API post-processing).
+        const dkanPrimary = await axios.get(dkanUrls[0], { headers: { 'Accept': 'application/json', 'User-Agent': 'DSFP-Dashboard-Importer/1.0' }, validateStatus: () => true, timeout: 30000 }).catch(e => ({ status: 0, _err: e.message }));
+
+        if (dkanPrimary && dkanPrimary.status === 200 && Array.isArray(dkanPrimary.data) && dkanPrimary.data.length > 0) {
+            // Map metastore items into the same `collections` shape the UI expects.
+            const collections = dkanPrimary.data.map(item => {
+                // item may be shaped as { identifier, title, nid } or { data: { identifier, title, nid }}
+                const src = (item && item.data) ? item.data : item;
+                const uuid = src && (src.identifier || src.id || src.uuid || item.identifier || item.id || item.uuid) || null;
+                const nid = src && (src.nid || src.drupal_internal__nid || src.internal_id || src.internalId) || (item && item.nid) || null;
+                const title = src && (src.title || src.name || src.label) || item && (item.title || item.name || item.label) || '';
+                return {
+                    nid: nid ? Number(nid) : null,
+                    uuid: uuid || null,
+                    title: title || '',
+                    status: true,
+                    attributes: {
+                        drupal_internal__nid: nid ? Number(nid) : undefined,
+                        title: title
+                    }
+                };
+            }).filter(c => c.uuid || c.nid);
+
+            return res.json({ success: true, collections });
+        }
+
+        // Metastore `/all` was not available — fall back to fetching JSON:API
+        const jsonApiRes = await axios.get(jsonApiUrl, {
+            headers: {
+                'Accept': 'application/vnd.api+json',
+                'Authorization': `Bearer ${token}`,
+                'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+            },
+            validateStatus: () => true,
+            timeout: 30000
+        });
+
+        if (jsonApiRes.status === 401) return unauthorizedResponse(res);
+        if (jsonApiRes.status !== 200) {
+            return res.status(502).json({
+                success: false,
+                error: `JSON:API HTTP ${jsonApiRes.status}`,
+                body: jsonApiRes.data
+            });
+        }
+
+        const userItems = (jsonApiRes.data && jsonApiRes.data.data) || [];
+        const userDataNodes = userItems
+            .map(t => ({
+                nid: t.attributes && t.attributes.drupal_internal__nid,
+                uuid: t.id,
+                title: (t.attributes && t.attributes.title) || '',
+                status: t.attributes && t.attributes.status,
+                attributes: t.attributes || {}
+            }))
+            .filter(c => c.nid);
+
+        // Identify which authored nodes are actual datasets (not distributions,
+        // keywords, themes, etc). DSFP publishes a `field_data_type` for many
+        // nodes; distributions commonly have `distribution`. Also some nodes
+        // embed DCAT JSON in `field_json_metadata` which we can inspect.
+        const datasetNodes = userDataNodes.filter(c => {
+            const a = c.attributes || {};
+            if (a.field_data_type && String(a.field_data_type).toLowerCase() === 'dataset') return true;
+            if (a.field_json_metadata && typeof a.field_json_metadata === 'string') {
+                if (/"@type"\s*:\s*"dcat:Dataset"/i.test(a.field_json_metadata)) return true;
+                try {
+                    const parsed = JSON.parse(a.field_json_metadata);
+                    const dtype = parsed && (parsed['@type'] || parsed.data && parsed.data['@type']);
+                    if (dtype && String(dtype).toLowerCase().includes('dataset')) return true;
+                } catch (e) {
+                    // ignore parse errors
+                }
+            }
+            return false;
+        });
+
+        // Non-admin users should only see datasets they authored. Admins
+        // continue to use the metastore intersection/fallback behaviour.
+        if (!dsfpSession.isAdmin) {
+            const onlyAuthoredDatasets = datasetNodes.map(d => ({ nid: d.nid, uuid: d.uuid, title: d.title, status: d.status, attributes: d.attributes }));
+            return res.json({ success: true, collections: onlyAuthoredDatasets });
+        }
+
+        // Build the set of UUIDs that the metastore considers actual datasets.
+        // If the metastore call failed for any reason, fall back to returning
+        // all of the user's `node/data` records (degrade gracefully rather
+        // than show an empty dropdown).
+        let datasetUuids = null;
+        let metastoreNote = null;
+        if (dkanRes && dkanRes.status === 200 && Array.isArray(dkanRes.data)) {
+            datasetUuids = new Set();
+            for (const item of dkanRes.data) {
+                if (item && item.identifier) datasetUuids.add(String(item.identifier));
+                // Some DKAN deployments wrap the POD record under .data:
+                if (item && item.data && item.data.identifier) {
+                    datasetUuids.add(String(item.data.identifier));
+                }
+            }
+        } else {
+            metastoreNote = dkanRes && dkanRes._err
+                ? `DKAN metastore unreachable: ${dkanRes._err}`
+                : `DKAN metastore returned HTTP ${dkanRes && dkanRes.status}`;
+            console.warn('[collections]', metastoreNote);
+        }
+
+        // Build an expanded set of metastore identifiers by including
+        // distribution identifiers / URLs so we can match nodes that
+        // reference datasets indirectly (e.g. via a file URL or UUID
+        // stored in a custom field).
+        const metastoreIdentifiers = new Set();
+        if (datasetUuids) {
+            for (const u of datasetUuids) metastoreIdentifiers.add(u);
+            for (const item of (dkanRes.data || [])) {
+                try {
+                    if (item && item.distribution && Array.isArray(item.distribution)) {
+                        for (const dist of item.distribution) {
+                            if (!dist) continue;
+                            if (dist.identifier) metastoreIdentifiers.add(String(dist.identifier));
+                            // Common field names for URLs
+                            const url = dist.accessURL || dist.downloadURL || dist.url || dist['@id'] || dist['url'];
+                            if (url && typeof url === 'string') {
+                                try {
+                                    const p = new URL(url);
+                                    const seg = (p.pathname || '').split('/').filter(Boolean).pop();
+                                    if (seg) metastoreIdentifiers.add(seg);
+                                } catch (e) {
+                                    // not an absolute URL — try to extract token-like parts
+                                    const parts = String(url).split(/[\/?#]+/).filter(Boolean);
+                                    if (parts.length) metastoreIdentifiers.add(parts.pop());
+                                }
+                            }
+                        }
+                    }
+                } catch (e) { /* ignore malformed metastore items */ }
+            }
+        }
+
+        // Helper: extract candidate identifier strings from a node's attributes.
+        const extractIdentifiers = (attrs) => {
+            const ids = new Set();
+            if (!attrs || typeof attrs !== 'object') return ids;
+            // Include node UUID
+            if (attrs.drupal_internal__nid) ids.add(String(attrs.drupal_internal__nid));
+            // Scan attribute values for identifier-like fields
+            for (const k of Object.keys(attrs)) {
+                const v = attrs[k];
+                if (!v) continue;
+                if (typeof v === 'string') ids.add(v);
+                else if (typeof v === 'number') ids.add(String(v));
+                else if (Array.isArray(v)) {
+                    for (const el of v) {
+                        if (!el) continue;
+                        if (typeof el === 'string') ids.add(el);
+                        else if (el.value) ids.add(String(el.value));
+                        else if (el.identifier) ids.add(String(el.identifier));
+                        else if (el.id) ids.add(String(el.id));
+                    }
+                } else if (typeof v === 'object') {
+                    if (v.value) ids.add(String(v.value));
+                    if (v.identifier) ids.add(String(v.identifier));
+                    if (v.id) ids.add(String(v.id));
+                }
+            }
+            return ids;
+        };
+
+        let collections = [];
+        if (!datasetUuids) {
+            collections = userDataNodes;
+        } else {
+            // Only consider authored nodes that look like actual datasets
+            const authoredDatasetNids = new Set(datasetNodes.map(d => String(d.nid)));
+
+            // First, try to match authored dataset nodes directly (UUIDs or attribute tokens)
+            collections = userDataNodes.filter(c => {
+                if (!authoredDatasetNids.has(String(c.nid))) return false;
+                if (datasetUuids.has(c.uuid)) return true;
+                const cand = extractIdentifiers(c.attributes);
+                for (const x of cand) if (metastoreIdentifiers.has(x)) return true;
+                return false;
+            });
+
+            // If none matched and many authored nodes are distributions, try
+            // to resolve dataset NIDs referenced by distribution downloadURLs.
+            if (collections.length === 0) {
+                const datasetNids = new Set();
+                for (const c of userDataNodes) {
+                    try {
+                        const meta = c.attributes && c.attributes.field_json_metadata;
+                        if (!meta) continue;
+                        let parsed = null;
+                        try { parsed = JSON.parse(meta); } catch (e) { parsed = null; }
+                        let url = null;
+                        if (parsed && parsed.data && (parsed.data.downloadURL || parsed.data.accessURL)) url = parsed.data.downloadURL || parsed.data.accessURL;
+                        if (!url && typeof meta === 'string') {
+                            // try to find a URL inside the string
+                            const m = meta.match(/https?:\/\/[^"'\\s]+/i);
+                            if (m) url = m[0];
+                        }
+                        if (!url) continue;
+                        const m2 = url.match(/\/data\/(\d+)\//);
+                        if (m2 && m2[1]) datasetNids.add(m2[1]);
+                    } catch (e) { /* ignore */ }
+                }
+
+                if (datasetNids.size > 0) {
+                    // Fetch the dataset nodes by nid and see if their UUIDs match metastore
+                    const fetchedDatasets = [];
+                    for (const nid of Array.from(datasetNids)) {
+                        try {
+                            const url = `${DSFP_BASE_URL}/jsonapi/node/data?filter[drupal_internal__nid]=${encodeURIComponent(nid)}&page[limit]=1`;
+                            const r = await axios.get(url, {
+                                headers: { 'Accept': 'application/vnd.api+json', 'Authorization': `Bearer ${token}` },
+                                validateStatus: () => true,
+                                timeout: 15000
+                            });
+                            if (r.status === 200 && r.data && Array.isArray(r.data.data) && r.data.data.length > 0) {
+                                const item = r.data.data[0];
+                                fetchedDatasets.push({ nid: nid, uuid: item.id, title: item.attributes && item.attributes.title || '', attributes: item.attributes || {} });
+                            }
+                        } catch (e) { /* ignore per-nid failures */ }
+                    }
+
+                    for (const d of fetchedDatasets) {
+                        if (datasetUuids.has(d.uuid) || metastoreIdentifiers.has(d.uuid)) {
+                            collections.push({ nid: Number(d.nid), uuid: d.uuid, title: d.title, status: true, attributes: d.attributes });
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no matches found, fall back to returning all authored nodes
+        // but include warnings so the UI can explain what's going on.
+        const warnings = [];
+        if (metastoreNote) warnings.push(metastoreNote);
+        if (datasetUuids && collections.length === 0 && userDataNodes.length > 0) {
+            warnings.push('No authored data nodes matched the DKAN metastore list; returning all authored data nodes instead.');
+            collections = userDataNodes;
+        }
+
+        res.json({ success: true, collections, ...(warnings.length ? { warning: warnings.join(' ') } : {}) });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// DEBUG endpoint: return raw upstream JSON:API + metastore responses
+// Useful for diagnosing why the collections list is empty. Only available
+// when a DSFP session exists.
+app.get('/api/dsfp/debug-collections', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    try {
+        const token = await getValidDsfpToken();
+
+        const jsonApiParams = new URLSearchParams();
+        // Debug endpoint: do not filter by author; fetch a large page.
+        jsonApiParams.set('fields[node--data]', 'title,drupal_internal__nid,status,created');
+        jsonApiParams.set('page[limit]', '100000');
+        jsonApiParams.set('sort', '-created');
+        const jsonApiUrl = `${DSFP_BASE_URL}/jsonapi/node/data?${jsonApiParams.toString()}`;
+        const dkanUrls = [
+            `${DSFP_BASE_URL}/api/1/metastore/schemas/dataset/all`,
+            `${DSFP_BASE_URL}/api/1/metastore/schemas/dataset/items`
+        ];
+
+        const [jsonApiRes, dkanRes] = await Promise.all([
+            axios.get(jsonApiUrl, {
+                headers: { 'Accept': 'application/vnd.api+json', 'Authorization': `Bearer ${token}` },
+                validateStatus: () => true
+            }).catch(e => ({ status: 0, _err: e.message })),
+            axios.get(dkanUrls[0], { headers: { 'Accept': 'application/json' }, validateStatus: () => true }).catch(e => ({ status: 0, _err: e.message }))
+        ]);
+
+        return res.json({
+            success: true,
+            jsonApi: { status: jsonApiRes.status, data: jsonApiRes.data },
+            metastore: { status: dkanRes.status, data: dkanRes.data }
+        });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/dsfp/collection-samples?nid=<collection-nid>
+// Attempts a best-effort fetch of the collection's sample records by
+// trying a couple of known export paths on the DSFP site. Returns an
+// array of sample objects when successful, or a helpful message +
+// collection URL when not.
+app.get('/api/dsfp/collection-samples', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const nid = (req.query.nid || '').toString().trim();
+    if (!/^[0-9]+$/.test(nid)) return res.status(400).json({ success: false, error: 'nid (numeric) is required' });
+
+    const tried = [];
+    try {
+        const token = await getValidDsfpToken();
+
+        function normalizeSampleRecord(sample) {
+            const source = sample && typeof sample === 'object' ? sample : {};
+            const pick = (keys) => {
+                for (const key of keys) {
+                    if (source[key] !== null && source[key] !== undefined && String(source[key]).trim() !== '') {
+                        return source[key];
+                    }
+                }
+                return '';
+            };
+
+            return {
+                ...source,
+                sample_id: pick(['sample_id', 'ID', 'Id', 'sampleId']),
+                short_name: pick(['short_name', 'short_name_for_contribution', 'Short name for contribution', 'Short name']),
+                short_name_for_contribution: pick(['short_name_for_contribution', 'Short name for contribution', 'short_name', 'Short name']),
+                sample_type: pick(['sample_type', 'type', 'Sample type', 'Type']),
+                type: pick(['type', 'sample_type', 'Sample type', 'Type'])
+            };
+        }
+
+        // Strategy 1: public JSON export at /data/{nid}/samples.json
+        const tryOne = async (url, headers) => {
+            tried.push(url);
+            try {
+                const r = await axios.get(url, {
+                    headers: headers || { 'Accept': 'application/json', 'User-Agent': 'DSFP-Dashboard-Importer/1.0' },
+                    responseType: 'text',
+                    validateStatus: () => true,
+                    transformResponse: x => x
+                });
+                if (r.status === 200) {
+                    const ct = (r.headers['content-type'] || '').toLowerCase();
+                    // If it's JSON-like, try parse
+                    if (ct.includes('application/json') || r.data.trim().startsWith('{') || r.data.trim().startsWith('[')) {
+                        try {
+                            const json = JSON.parse(r.data);
+                            const samples = Array.isArray(json) ? json : (json.samples || json.data || []);
+                            return { success: true, source: url, samples: samples.map(normalizeSampleRecord) };
+                        } catch (e) {
+                            // Not parseable
+                            return { success: false, error: 'Received non-JSON response', status: r.status, body: r.data };
+                        }
+                    }
+                    // Not JSON — skip
+                    return { success: false, error: 'Non-JSON response', status: r.status };
+                }
+                return { success: false, status: r.status };
+            } catch (e) {
+                return { success: false, error: e.message };
+            }
+        };
+
+        const base = normalizeBaseUrl(DSFP_BASE_URL);
+
+        // Try with bearer token first (some exports require auth)
+        const u1 = `${base}/data/${nid}/samples.json`;
+        let result = await tryOne(u1, { 'Accept': 'application/json', 'Authorization': `Bearer ${token}`, 'User-Agent': 'DSFP-Dashboard-Importer/1.0' });
+        if (result.success) return res.json({ success: true, samples: result.samples, source: result.source });
+
+        // Try anonymously (some endpoints are public)
+        result = await tryOne(u1);
+        if (result.success) return res.json({ success: true, samples: result.samples, source: result.source });
+
+        // Try alternate path: /data/{nid}/samples
+        const u2 = `${base}/data/${nid}/samples`;
+        result = await tryOne(u2, { 'Accept': 'application/json', 'Authorization': `Bearer ${token}` });
+        if (result.success) return res.json({ success: true, samples: result.samples, source: result.source });
+        result = await tryOne(u2);
+        if (result.success) return res.json({ success: true, samples: result.samples, source: result.source });
+
+        // If all heuristics failed, return helpful info including the collection page URL
+        const collectionUrl = `${base}/data/${nid}`;
+        return res.status(404).json({
+            success: false,
+            error: 'Could not locate a machine-readable samples export for this collection (best-effort tried paths).',
+            tried,
+            collectionUrl
+        });
+
+    } catch (e) {
+        if (e.message === 'unauthorized') return unauthorizedResponse(res, 'DSFP rejected the access token');
+        console.error('collection-samples error:', e.message);
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Minimal RFC-4180-ish CSV parser. Handles quoted fields with embedded commas,
+// newlines and doubled quotes.
+function parseCsv(text) {
+    const rows = [];
+    let cur = '', row = [], inQ = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQ) {
+            if (ch === '"') {
+                if (text[i + 1] === '"') { cur += '"'; i++; }
+                else inQ = false;
+            } else cur += ch;
+        } else {
+            if (ch === '"' && cur === '') inQ = true;
+            else if (ch === ',') { row.push(cur); cur = ''; }
+            else if (ch === '\r') { /* swallow */ }
+            else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+            else cur += ch;
+        }
+    }
+    if (cur.length || row.length) { row.push(cur); rows.push(row); }
+    return rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ''));
+}
+
+// GET /api/dsfp/instrument-setups?nid=<collection-nid>
+//   Fetches /data/{nid}/instrument-setups.csv and returns the rows.
+app.get('/api/dsfp/instrument-setups', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const nid = (req.query.nid || '').toString().trim();
+    if (!/^\d+$/.test(nid)) {
+        return res.status(400).json({ success: false, error: 'nid is required (numeric)' });
+    }
+    try {
+        const token = await getValidDsfpToken();
+        const url = `${DSFP_BASE_URL}/data/${nid}/instrument-setups.csv`;
+        const r = await axios.get(url, {
+            headers: {
+                'Accept': 'text/csv, */*;q=0.5',
+                'Authorization': `Bearer ${token}`,
+                'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+            },
+            validateStatus: () => true,
+            responseType: 'text',
+            transformResponse: x => x
+        });
+        if (r.status === 401) return unauthorizedResponse(res);
+        if (r.status === 404) {
+            return res.json({ success: true, setups: [], header: [] });
+        }
+        if (r.status !== 200) {
+            return res.status(r.status).json({
+                success: false, error: `HTTP ${r.status}`
+            });
+        }
+        const text = typeof r.data === 'string' ? r.data : String(r.data || '');
+        const rows = parseCsv(text);
+        if (rows.length === 0) {
+            return res.json({ success: true, setups: [], header: [] });
+        }
+        const header = rows[0].map(h => h.trim());
+        const setups = rows.slice(1).map(row => {
+            const obj = {};
+            header.forEach((h, i) => { obj[h] = (row[i] || '').trim(); });
+            return obj;
+        });
+        res.json({ success: true, header, setups });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+
+// Submit a single sample (with optional files) to the live webform API.
+app.post('/api/webform/import', webformUpload.any(), async (req, res) => {
+    try {
+        if (!dsfpSession) return unauthorizedResponse(res);
+
+        const webformId = req.body.webform_id || 'sample';
+
+        // Field values arrive as a JSON string under "fields".
+        let fields = {};
+        if (req.body.fields) {
+            try {
+                fields = JSON.parse(req.body.fields);
+            } catch (e) {
+                return res.status(400).json({ success: false, error: 'Invalid "fields" JSON' });
+            }
+        }
+
+        // The author override UUID (admin only — client passes this when the
+        // admin has selected a different owner for the submission).
+        const authorUuid = (dsfpSession && dsfpSession.isAdmin)
+            ? ((req.body.author_uuid || '').trim() || null)
+            : null;
+
+        // Build the multipart payload for the Venthic webform API.
+        // Text fields MUST be wrapped under values[field_name] per the API spec.
+        // File fields must use the raw field name (PHP puts files in $_FILES
+        // by the top-level key, not under $_FILES['values']).
+        const form = new FormData();
+        form.append('webform_id', webformId);
+        for (const [key, value] of Object.entries(fields)) {
+            if (value === null || value === undefined) continue;
+            const str = String(value);
+            if (str.trim() === '') continue;
+            form.append(`values[${key}]`, str);
+        }
+
+        // Attach uploaded files under their raw webform field names.
+        for (const file of req.files || []) {
+            const blob = new Blob([file.buffer], {
+                type: file.mimetype || 'application/octet-stream'
+            });
+            form.append(file.fieldname, blob, file.originalname);
+        }
+
+        const { cookies, csrfToken } = await getValidDsfpSession();
+        const url = `${dsfpSession.baseUrl}/api/webform/submit`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Cookie': cookies,
+                'X-CSRF-Token': csrfToken,
+                'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+            },
+            body: form
+        });
+
+        if (response.status === 401 || response.status === 403) {
+            // Session may have expired — clear it so it's refreshed next call.
+            if (dsfpSession) { dsfpSession.sessionCookies = null; dsfpSession.csrfToken = null; }
+            return unauthorizedResponse(res, 'DSFP rejected the session cookie — please sign in again');
+        }
+
+        const text = await response.text();
+        let body;
+        try {
+            body = JSON.parse(text);
+        } catch (e) {
+            body = text;
+        }
+
+        const submissionId = body && typeof body === 'object'
+            ? (body.submission_id || body.sid)
+            : undefined;
+
+        // If the admin specified an owner override, PATCH the submission's uid
+        // relationship immediately after creation.
+        if (authorUuid && submissionId) {
+            try {
+                const token = await getValidDsfpToken();
+                // 1. Look up the submission UUID by SID.
+                const lookupResp = await fetch(
+                    `${dsfpSession.baseUrl}/jsonapi/webform_submission/${webformId}` +
+                    `?filter[drupal_internal__sid]=${submissionId}`,
+                    { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.api+json' } }
+                );
+                const lookupData = await lookupResp.json();
+                const submissionUuid = lookupData?.data?.[0]?.id;
+                if (submissionUuid) {
+                    // 2. PATCH the uid relationship.
+                    await fetch(
+                        `${dsfpSession.baseUrl}/jsonapi/webform_submission/${webformId}` +
+                        `/${submissionUuid}/relationships/uid`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/vnd.api+json',
+                                'Accept': 'application/vnd.api+json'
+                            },
+                            body: JSON.stringify({ data: { type: 'user--user', id: authorUuid } })
+                        }
+                    );
+                }
+            } catch (e) {
+                console.warn('[webform/import] author PATCH failed:', e.message);
+            }
+        }
+
+        return res.status(200).json({
+            success: response.ok,
+            status: response.status,
+            submission_id: submissionId,
+            response: body
+        });
+    } catch (error) {
+        if (error.status === 401) return unauthorizedResponse(res, error.message);
+        console.error('Error importing sample to webform API:', error.message);
+        return res.status(502).json({ success: false, error: error.message });
+    }
+});
+
+// ─── Sample processing pipeline (parse → componentize → jsoncreate) ────────
+//
+// Each step runs as a one-off Docker container (dockerode `docker.run`,
+// AutoRemove: true) — the same mechanism already used above for the
+// data-loader and reload-compounds containers — instead of a long-running
+// REST service, since these R scripts are single-shot batch jobs.
+//
+// AWS credentials are never stored in this server or committed to the repo.
+// For every job we fetch short-lived STS credentials from DSFP on behalf of
+// the signed-in user (see getProcessingAwsCredentials). This assumes DSFP
+// exposes an authenticated endpoint returning temporary credentials; adjust
+// DSFP_STS_CREDENTIALS_PATH via env if the real path differs, and see the
+// implementation notes shared separately for what that endpoint needs to
+// return.
+const STS_CREDENTIALS_PATH = process.env.DSFP_STS_CREDENTIALS_PATH || '/api/aws/sts-credentials';
+const DOCKER_NETWORK = process.env.DSFP_DOCKER_NETWORK || 'dsfp-in-a-box_default';
+// The pipeline's own S3 artefacts are read back by componentize/jsoncreate via
+// plain `load(url(...))` calls with no credentials, so this prefix is
+// public-read — status checks below need no AWS credentials at all.
+const S3_PUBLIC_INDEX_BASE = process.env.S3_PUBLIC_INDEX_BASE || 'https://files.dsfp.norman-data.eu/index';
+
+const PROCESSING_PIPELINE = ['parse', 'componentize', 'jsoncreate'];
+const PROCESSING_WORKFLOW = ['parse', 'componentize', 'jsoncreate', 'prepare'];
+
+// Image names for ephemeral processing containers
+const PROCESSING_IMAGES = {
+    parse: 'dsfp-in-a-box-models-parse:latest',
+    componentize: 'dsfp-in-a-box-models-componentize:latest',
+    jsoncreate: 'dsfp-in-a-box-models-jsoncreate:latest'
+};
+
+// Default processing settings - concurrency and resource limits per service
+const DEFAULT_PROCESSING_SETTINGS = {
+    parse: { concurrency: 5, cpus: 1, memoryMB: 2048 },
+    componentize: { concurrency: 5, cpus: 1, memoryMB: 2048 },
+    jsoncreate: { concurrency: 5, cpus: 1, memoryMB: 1024 },
+    screening: { maxConcurrentRequests: 2, substancesBatchSize: 5, requestDelayMs: 100 }
+};
+
+const PROCESSING_SETTINGS_FILE = path.join(__dirname, 'data', 'processing-settings.json');
+
+// Load processing settings from disk, or return defaults
+function loadProcessingSettings() {
+    try {
+        if (fs.existsSync(PROCESSING_SETTINGS_FILE)) {
+            const data = JSON.parse(fs.readFileSync(PROCESSING_SETTINGS_FILE, 'utf8'));
+            // Merge with defaults to ensure all keys exist
+            return {
+                parse: { ...DEFAULT_PROCESSING_SETTINGS.parse, ...data.parse },
+                componentize: { ...DEFAULT_PROCESSING_SETTINGS.componentize, ...data.componentize },
+                jsoncreate: { ...DEFAULT_PROCESSING_SETTINGS.jsoncreate, ...data.jsoncreate },
+                screening: { ...DEFAULT_PROCESSING_SETTINGS.screening, ...data.screening }
+            };
+        }
+    } catch (err) {
+        console.warn('Failed to load processing settings, using defaults:', err.message);
+    }
+    return { ...DEFAULT_PROCESSING_SETTINGS };
+}
+
+// Save processing settings to disk
+function saveProcessingSettings(settings) {
+    const dir = path.dirname(PROCESSING_SETTINGS_FILE);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(PROCESSING_SETTINGS_FILE, JSON.stringify(settings, null, 2));
+}
+
+// In-memory settings cache
+let processingSettings = loadProcessingSettings();
+
+// jobId -> { service, sampleId, collectionId, uid, state, error, startedAt, finishedAt, containerId }
+const processingJobs = new Map();
+
+// Cached STS credentials, keyed by the current session's uid.
+let cachedAwsCredentials = null;
+
+const PROCESSING_INDEX_DIR = path.join(__dirname, 'data', 'index');
+
+// Maps each pipeline step to the artifact filename it produces locally.
+const PROCESSING_ARTIFACT_FILENAMES = {
+    parse: 'parse.RData',
+    componentize: 'componentize.RData',
+    jsoncreate: 'standard.json'
+};
+
+// Uploads a single step's local artifact to S3 right after that step
+// completes successfully, so results are backed up immediately instead of
+// only during the later "Prepare" step. The local copy in /data/index is
+// always kept — this is a copy, not a move.
+async function uploadStepArtifactToS3(service, sampleId, credentials) {
+    const filename = PROCESSING_ARTIFACT_FILENAMES[service];
+    if (!filename) return;
+    const localPath = path.join(PROCESSING_INDEX_DIR, String(sampleId), `${sampleId}-${filename}`);
+    if (!fs.existsSync(localPath)) return;
+
+    const s3Key = `index/${sampleId}/${sampleId}-${filename}`;
+    const s3Client = new S3Client({
+        region: credentials.region,
+        credentials: {
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            sessionToken: credentials.sessionToken
+        }
+    });
+    console.log(`[jobs/${service}] Uploading ${localPath} -> s3://norman-data/${s3Key}`);
+    const fileContent = fs.readFileSync(localPath);
+    const contentType = localPath.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+    await s3Client.send(new PutObjectCommand({
+        Bucket: 'norman-data',
+        Key: s3Key,
+        Body: fileContent,
+        ContentType: contentType
+    }));
+    console.log(`[jobs/${service}] Upload complete for sample ${sampleId}`);
+}
+
+// Downloads a single step's S3 artifact into the local /data/index folder,
+// mirroring uploadStepArtifactToS3's naming conventions. Used by the
+// "Synchronize data" feature to pull down artifacts that exist on S3 but
+// are missing locally.
+async function downloadStepArtifactFromS3(service, sampleId) {
+    const filename = PROCESSING_ARTIFACT_FILENAMES[service];
+    if (!filename) return false;
+    const localDir = path.join(PROCESSING_INDEX_DIR, String(sampleId));
+    const localPath = path.join(localDir, `${sampleId}-${filename}`);
+    const s3Url = `${S3_PUBLIC_INDEX_BASE}/${sampleId}/${sampleId}-${filename}`;
+    const response = await axios.get(s3Url, { responseType: 'arraybuffer', timeout: 120000 });
+    fs.mkdirSync(localDir, { recursive: true });
+    fs.writeFileSync(localPath, response.data);
+    console.log(`[sync/${service}] Downloaded ${s3Url} -> ${localPath}`);
+    return true;
+}
+
+// Docker Desktop on Windows reports bind-mount sources in its internal
+// WSL-style form (e.g. "/run/desktop/mnt/host/c/Users/me/project/data")
+// rather than a native Windows path. Convert that form into a real
+// "C:\Users\me\project\data" path so it can be opened via a file:// link
+// in the browser. Non-matching inputs (e.g. native Linux hosts) are
+// returned unchanged.
+function dockerDesktopMountToWindowsPath(mountSource) {
+    const match = /^\/run\/desktop\/mnt\/host\/([a-zA-Z])\/(.*)$/.exec(mountSource || '');
+    if (match) {
+        const drive = match[1].toUpperCase();
+        const rest = match[2].replace(/\//g, '\\');
+        return `${drive}:\\${rest}`;
+    }
+    return mountSource;
+}
+
+// Runs a processing step in an ephemeral container that auto-removes on completion.
+// Returns { exitCode, containerId }.
+async function runProcessingStepInContainer(service, sampleId, collectionId, credentials) {
+    const imageName = PROCESSING_IMAGES[service];
+    if (!imageName) {
+        throw new Error(`Unknown processing image for service ${service}`);
+    }
+
+    const settings = processingSettings[service] || DEFAULT_PROCESSING_SETTINGS[service];
+    const hostDataPath = await getProcessingHostDataPath();
+    const containerName = `dsfp-job-${service}-${sampleId}-${Date.now()}`;
+
+    // Create the container with resource limits
+    const container = await docker.createContainer({
+        Image: imageName,
+        name: containerName,
+        Cmd: ['Rscript', '/app/runtime.R', String(collectionId), String(sampleId)],
+        Env: [
+            `AWS_ACCESS_KEY_ID=${credentials.accessKeyId}`,
+            `AWS_SECRET_ACCESS_KEY=${credentials.secretAccessKey}`,
+            ...(credentials.sessionToken ? [`AWS_SESSION_TOKEN=${credentials.sessionToken}`] : []),
+            `AWS_DEFAULT_REGION=${credentials.region}`
+        ],
+        WorkingDir: '/app',
+        HostConfig: {
+            AutoRemove: true,
+            Binds: [`${hostDataPath}:/data`],
+            NanoCpus: Math.round(settings.cpus * 1e9),
+            Memory: settings.memoryMB * 1024 * 1024
+        },
+        AttachStdout: true,
+        AttachStderr: true
+    });
+
+    const containerId = container.id;
+    console.log(`[jobs/${service}] Starting ephemeral container ${containerName} (${containerId.slice(0, 12)})`);
+
+    // Attach to get logs before starting
+    const stream = await container.attach({ stream: true, stdout: true, stderr: true });
+    stream.on('data', chunk => {
+        const text = chunk.toString();
+        for (const line of text.split(/\r?\n/)) {
+            if (line) {
+                console.log(`[jobs/${service}] ${line}`);
+            }
+        }
+    });
+
+    await container.start();
+
+    // Wait for the container to finish
+    const { StatusCode } = await container.wait();
+    console.log(`[jobs/${service}] Container ${containerName} exited with code ${StatusCode}`);
+
+    return { exitCode: StatusCode, containerId };
+}
+
+async function getProcessingAwsCredentials() {
+    if (!dsfpSession) {
+        const err = new Error('Not logged in to DSFP'); err.status = 401; throw err;
+    }
+    if (cachedAwsCredentials && cachedAwsCredentials.uid === dsfpSession.uid &&
+        Date.now() < cachedAwsCredentials.expiresAt - 30_000) {
+        return cachedAwsCredentials.credentials;
+    }
+    const token = await getValidDsfpToken();
+    const url = `${DSFP_BASE_URL}${STS_CREDENTIALS_PATH}`;
+    const response = await axios.get(url, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
+        validateStatus: () => true,
+        timeout: 15000
+    });
+    if (response.status === 401) {
+        const err = new Error('DSFP rejected the access token'); err.status = 401; throw err;
+    }
+    if (response.status !== 200 || !response.data || !response.data.accessKeyId) {
+        const err = new Error(
+            `Could not obtain AWS credentials from DSFP (HTTP ${response.status}). Expected ` +
+            `${STS_CREDENTIALS_PATH} to return { accessKeyId, secretAccessKey, sessionToken, region, expiresAt }.`
+        );
+        err.status = 502;
+        throw err;
+    }
+    const credentials = {
+        accessKeyId: response.data.accessKeyId,
+        secretAccessKey: response.data.secretAccessKey,
+        sessionToken: response.data.sessionToken,
+        region: response.data.region || 'eu-central-1'
+    };
+    const expiresAt = response.data.expiresAt ? new Date(response.data.expiresAt).getTime() : (Date.now() + 15 * 60 * 1000);
+    cachedAwsCredentials = { uid: dsfpSession.uid, credentials, expiresAt };
+    return credentials;
+}
+
+// Resolve the Drupal author (internal uid) of a collection node so we can
+// check "does the current user manage this collection?". Admins bypass
+// this check entirely (see canUserProcessCollection).
+async function getCollectionOwnerUid(nid) {
+    const token = await getValidDsfpToken();
+    const url = `${DSFP_BASE_URL}/jsonapi/node/data?filter[drupal_internal__nid]=${encodeURIComponent(nid)}` +
+        `&include=uid&page[limit]=1`;
+    const response = await axios.get(url, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.api+json' },
+        validateStatus: () => true,
+        timeout: 20000
+    });
+    if (response.status === 401) { const err = new Error('unauthorized'); err.status = 401; throw err; }
+    if (response.status !== 200) return null;
+    const node = response.data && response.data.data && response.data.data[0];
+    if (!node) return null;
+    const authorRef = node.relationships && node.relationships.uid && node.relationships.uid.data;
+    if (!authorRef) return null;
+    const included = response.data.included || [];
+    const authorEntity = included.find(e => e.id === authorRef.id);
+    return (authorEntity && authorEntity.attributes && authorEntity.attributes.drupal_internal__uid) || null;
+}
+
+async function canUserProcessCollection(nid) {
+    if (!dsfpSession) return false;
+    if (dsfpSession.isAdmin) return true;
+    const ownerUid = await getCollectionOwnerUid(nid);
+    return ownerUid !== null && Number(ownerUid) === Number(dsfpSession.uid);
+}
+
+// GET /api/dsfp/collection/:nid/can-process
+app.get('/api/dsfp/collection/:nid/can-process', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const nid = (req.params.nid || '').trim();
+    if (!/^[0-9]+$/.test(nid)) return res.status(400).json({ success: false, error: 'nid (numeric) is required' });
+    try {
+        const canProcess = await canUserProcessCollection(nid);
+        res.json({ success: true, canProcess });
+    } catch (e) {
+        if (e.status === 401) return unauthorizedResponse(res, e.message);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/dsfp/sample/:sampleId/processing-status
+app.get('/api/dsfp/sample/:sampleId/processing-status', async (req, res) => {
+    const sampleId = (req.params.sampleId || '').trim();
+    if (!/^[0-9]+$/.test(sampleId)) return res.status(400).json({ success: false, error: 'sampleId (numeric) is required' });
+    try {
+        // Local paths for artifacts (written by R containers)
+        const localDir = path.join(PROCESSING_INDEX_DIR, sampleId);
+        const localArtifacts = {
+            parse: path.join(localDir, `${sampleId}-parse.RData`),
+            componentize: path.join(localDir, `${sampleId}-componentize.RData`),
+            jsoncreate: path.join(localDir, `${sampleId}-standard.json`)
+        };
+        // S3 URLs for fallback (legacy samples)
+        const s3Artifacts = {
+            parse: `${S3_PUBLIC_INDEX_BASE}/${sampleId}/${sampleId}-parse.RData`,
+            componentize: `${S3_PUBLIC_INDEX_BASE}/${sampleId}/${sampleId}-componentize.RData`,
+            jsoncreate: `${S3_PUBLIC_INDEX_BASE}/${sampleId}/${sampleId}-standard.json`
+        };
+        
+        // Check each artifact: local first, then S3 fallback
+        const checks = await Promise.all(Object.entries(localArtifacts).map(async ([step, localPath]) => {
+            // Check local file first
+            if (fs.existsSync(localPath)) {
+                return [step, true];
+            }
+            // Fall back to S3 HEAD request for legacy samples
+            try {
+                const r = await axios.head(s3Artifacts[step], { validateStatus: () => true, timeout: 10000 });
+                return [step, r.status === 200];
+            } catch (e) {
+                return [step, false];
+            }
+        }));
+        const done = Object.fromEntries(checks);
+        done.prepare = done.jsoncreate ? await isSamplePrepared(sampleId) : false;
+        let status = 0;
+        if (done.parse) status = 1;
+        if (done.componentize) status = 2;
+        if (done.jsoncreate) status = 3;
+        if (done.prepare) status = 4;
+        const nextService = PROCESSING_WORKFLOW[status] || null; // null once status === 4 (complete)
+        // downloadUrl points to local JSON if it exists, else S3
+        const downloadUrl = done.jsoncreate
+            ? (fs.existsSync(localArtifacts.jsoncreate) ? `/api/dsfp/sample/${sampleId}/artifact/standard.json` : s3Artifacts.jsoncreate)
+            : null;
+        res.json({ success: true, status, done, nextService, downloadUrl });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/dsfp/sample/:sampleId/artifact/:filename
+// Serves local artifacts (parse.RData, componentize.RData, standard.json).
+app.get('/api/dsfp/sample/:sampleId/artifact/:filename', (req, res) => {
+    const sampleId = (req.params.sampleId || '').trim();
+    const filename = (req.params.filename || '').trim();
+    if (!/^[0-9]+$/.test(sampleId)) {
+        return res.status(400).json({ success: false, error: 'sampleId (numeric) is required' });
+    }
+    const allowedFiles = ['parse.RData', 'componentize.RData', 'standard.json'];
+    if (!allowedFiles.includes(filename)) {
+        return res.status(400).json({ success: false, error: `filename must be one of: ${allowedFiles.join(', ')}` });
+    }
+    const localPath = path.join(PROCESSING_INDEX_DIR, sampleId, `${sampleId}-${filename}`);
+    if (!fs.existsSync(localPath)) {
+        return res.status(404).json({ success: false, error: 'Artifact not found locally' });
+    }
+    const contentType = filename.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    res.sendFile(localPath);
+});
+
+// GET /api/dsfp/sample/:sampleId/local-folder
+// Reports whether any processing artifact exists locally for this sample
+// and, if so, the host filesystem path to its /data/index/{sampleId}
+// folder (so the front-end can offer a "View files" link that opens it
+// via file:// in the browser). Stays hidden (exists: false) otherwise.
+app.get('/api/dsfp/sample/:sampleId/local-folder', async (req, res) => {
+    const sampleId = (req.params.sampleId || '').trim();
+    if (!/^[0-9]+$/.test(sampleId)) {
+        return res.status(400).json({ success: false, error: 'sampleId (numeric) is required' });
+    }
+    try {
+        const localDir = path.join(PROCESSING_INDEX_DIR, sampleId);
+        const exists = Object.values(PROCESSING_ARTIFACT_FILENAMES).some(filename =>
+            fs.existsSync(path.join(localDir, `${sampleId}-${filename}`))
+        );
+        if (!exists) {
+            return res.json({ success: true, exists: false });
+        }
+        const mountSource = await getProcessingHostDataPath();
+        const windowsDataPath = dockerDesktopMountToWindowsPath(mountSource);
+        const hostPath = `${String(windowsDataPath).replace(/[\\/]+$/, '')}\\index\\${sampleId}`;
+        res.json({ success: true, exists: true, hostPath });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// POST /api/dsfp/sample/:sampleId/synchronize  { collection_id }
+// Reconciles local vs. S3 artifact availability for one sample: downloads
+// any artifact present on S3 but missing locally, and uploads any artifact
+// present locally but missing on S3. Used by the "Synchronize data" bulk
+// action (called once per sample in the selected collection).
+app.post('/api/dsfp/sample/:sampleId/synchronize', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const sampleId = (req.params.sampleId || '').trim();
+    const collectionId = String((req.body && req.body.collection_id) || '').trim();
+    if (!/^[0-9]+$/.test(sampleId) || !/^[0-9]+$/.test(collectionId)) {
+        return res.status(400).json({ success: false, error: 'sampleId and collection_id (numeric) are required' });
+    }
+
+    try {
+        const allowed = await canUserProcessCollection(collectionId);
+        if (!allowed) {
+            return res.status(403).json({ success: false, error: 'You do not manage this collection.' });
+        }
+
+        const credentials = await getProcessingAwsCredentials();
+        const localDir = path.join(PROCESSING_INDEX_DIR, sampleId);
+        const actions = {};
+
+        for (const service of Object.keys(PROCESSING_ARTIFACT_FILENAMES)) {
+            const filename = PROCESSING_ARTIFACT_FILENAMES[service];
+            const localPath = path.join(localDir, `${sampleId}-${filename}`);
+            const localExists = fs.existsSync(localPath);
+            const s3Url = `${S3_PUBLIC_INDEX_BASE}/${sampleId}/${sampleId}-${filename}`;
+
+            let remoteExists = false;
+            try {
+                const head = await axios.head(s3Url, { validateStatus: () => true, timeout: 10000 });
+                remoteExists = head.status === 200;
+            } catch (e) {
+                remoteExists = false;
+            }
+
+            try {
+                if (!localExists && remoteExists) {
+                    await downloadStepArtifactFromS3(service, sampleId);
+                    actions[service] = 'downloaded';
+                } else if (localExists && !remoteExists) {
+                    await uploadStepArtifactToS3(service, sampleId, credentials);
+                    actions[service] = 'uploaded';
+                } else {
+                    actions[service] = 'noop';
+                }
+            } catch (stepErr) {
+                console.error(`[sync/${service}] Failed for sample ${sampleId}:`, stepErr.message);
+                actions[service] = 'error';
+            }
+        }
+
+        res.json({ success: true, actions });
+    } catch (e) {
+        if (e.status === 401) return unauthorizedResponse(res, e.message);
+        console.error('[sample/synchronize] error:', e.message);
+        res.status(e.status || 500).json({ success: false, error: e.message });
+    }
+});
+
+// POST /api/dsfp/sample/:sampleId/prepare  { collection_id }
+// Indexes the generated standard.json for one sample into the screening index.
+// Also uploads local artifacts to S3 if they exist.
+app.post('/api/dsfp/sample/:sampleId/prepare', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const sampleId = (req.params.sampleId || '').trim();
+    const collectionId = String((req.body && req.body.collection_id) || '').trim();
+    if (!/^[0-9]+$/.test(sampleId) || !/^[0-9]+$/.test(collectionId)) {
+        return res.status(400).json({ success: false, error: 'sampleId and collection_id (numeric) are required' });
+    }
+
+    try {
+        const allowed = await canUserProcessCollection(collectionId);
+        if (!allowed) {
+            return res.status(403).json({ success: false, error: 'You do not manage this collection.' });
+        }
+
+        // Local paths for artifacts
+        const localDir = path.join(PROCESSING_INDEX_DIR, sampleId);
+        const localArtifacts = {
+            parse: { local: path.join(localDir, `${sampleId}-parse.RData`), s3Key: `index/${sampleId}/${sampleId}-parse.RData` },
+            componentize: { local: path.join(localDir, `${sampleId}-componentize.RData`), s3Key: `index/${sampleId}/${sampleId}-componentize.RData` },
+            jsoncreate: { local: path.join(localDir, `${sampleId}-standard.json`), s3Key: `index/${sampleId}/${sampleId}-standard.json` }
+        };
+        const localJsonPath = localArtifacts.jsoncreate.local;
+        const hasLocalJson = fs.existsSync(localJsonPath);
+
+        // Upload local artifacts to S3 if they exist
+        const hasAnyLocalFiles = Object.values(localArtifacts).some(a => fs.existsSync(a.local));
+        if (hasAnyLocalFiles) {
+            console.log(`[prepare] Uploading local artifacts for sample ${sampleId} to S3...`);
+            const credentials = await getProcessingAwsCredentials();
+            const s3Client = new S3Client({
+                region: credentials.region,
+                credentials: {
+                    accessKeyId: credentials.accessKeyId,
+                    secretAccessKey: credentials.secretAccessKey,
+                    sessionToken: credentials.sessionToken
+                }
+            });
+            
+            for (const [step, artifact] of Object.entries(localArtifacts)) {
+                if (fs.existsSync(artifact.local)) {
+                    console.log(`[prepare] Uploading ${step}: ${artifact.local} -> s3://norman-data/${artifact.s3Key}`);
+                    const fileContent = fs.readFileSync(artifact.local);
+                    const contentType = artifact.local.endsWith('.json') ? 'application/json' : 'application/octet-stream';
+                    await s3Client.send(new PutObjectCommand({
+                        Bucket: 'norman-data',
+                        Key: artifact.s3Key,
+                        Body: fileContent,
+                        ContentType: contentType
+                    }));
+                }
+            }
+            console.log(`[prepare] Upload complete for sample ${sampleId}`);
+        }
+
+        // Read JSON data: local first, then S3 fallback
+        let jsonData;
+        const jsonUrl = `${S3_PUBLIC_INDEX_BASE}/${sampleId}/${sampleId}-standard.json`;
+        if (hasLocalJson) {
+            console.log(`[prepare] Reading JSON from local: ${localJsonPath}`);
+            const rawJson = fs.readFileSync(localJsonPath, 'utf8');
+            jsonData = JSON.parse(rawJson);
+        } else {
+            console.log(`[prepare] Reading JSON from S3: ${jsonUrl}`);
+            const response = await axios.get(jsonUrl, { timeout: 20000 });
+            jsonData = response.data;
+        }
+
+        if (!validateJsonFormat(jsonData)) {
+            return res.status(400).json({ success: false, error: 'Generated JSON is missing required screening fields' });
+        }
+
+        await ensureScreeningIndex();
+
+        const insertResult = await bulkInsertToElasticsearch([{
+            _id: `${jsonData.sample_id}`,
+            data: jsonData
+        }], SCREENING_INDEX);
+
+        if (!insertResult.success) {
+            return res.status(500).json({ success: false, error: insertResult.error || 'Could not index sample for screening' });
+        }
+
+        await insertTrackingRecord(
+            `${sampleId}-standard.json`,
+            jsonUrl,
+            jsonData.sample_id,
+            jsonData.short_name,
+            jsonData.sample_type || null,
+            jsonData.instrument_setup_used?.ionization_type || null,
+            'prepared'
+        );
+
+        res.json({ success: true, prepared: true, downloadUrl: jsonUrl });
+    } catch (e) {
+        if (e.status === 401) return unauthorizedResponse(res, e.message);
+        console.error('[sample/prepare] error:', e.message);
+        res.status(e.status || 500).json({ success: false, error: e.message });
+    }
+});
+
+// POST /api/jobs/enqueue  { service, collection_id, sample_id }
+// Launches the requested pipeline step as an ephemeral Docker container and
+// returns immediately with a jobId; poll GET /api/jobs/:jobId/status for
+// completion.
+app.post('/api/jobs/enqueue', async (req, res) => {
+    if (!dsfpSession) return unauthorizedResponse(res);
+    const { service, collection_id, sample_id } = req.body || {};
+    if (!PROCESSING_PIPELINE.includes(service)) {
+        return res.status(400).json({ success: false, error: `service must be one of: ${PROCESSING_PIPELINE.join(', ')}` });
+    }
+    const collectionId = String(collection_id || '').trim();
+    const sampleId = String(sample_id || '').trim();
+    if (!/^[0-9]+$/.test(collectionId) || !/^[0-9]+$/.test(sampleId)) {
+        return res.status(400).json({ success: false, error: 'collection_id and sample_id (numeric) are required' });
+    }
+
+    try {
+        const allowed = await canUserProcessCollection(collectionId);
+        if (!allowed) {
+            return res.status(403).json({ success: false, error: 'You do not manage this collection.' });
+        }
+
+        // Count active jobs for this service
+        const settings = processingSettings[service] || DEFAULT_PROCESSING_SETTINGS[service];
+        const activeJobCount = Array.from(processingJobs.values()).filter(
+            job => job.service === service && job.state === 'processing'
+        ).length;
+        if (activeJobCount >= settings.concurrency) {
+            return res.status(409).json({
+                success: false,
+                error: `Service ${service} has reached its concurrency limit (${settings.concurrency} active jobs)`
+            });
+        }
+
+        const credentials = await getProcessingAwsCredentials();
+
+        const jobId = `${service}-${sampleId}-${Date.now()}`;
+        processingJobs.set(jobId, {
+            service, sampleId, collectionId,
+            uid: dsfpSession.uid,
+            state: 'processing',
+            error: null,
+            startedAt: Date.now(),
+            finishedAt: null,
+            containerId: null
+        });
+
+        runProcessingStepInContainer(service, sampleId, collectionId, credentials).then(async ({ exitCode, containerId }) => {
+            const job = processingJobs.get(jobId);
+            if (!job) return;
+            job.finishedAt = Date.now();
+            job.containerId = containerId;
+            if (exitCode === 0) {
+                job.state = 'completed';
+                try {
+                    await uploadStepArtifactToS3(service, sampleId, credentials);
+                } catch (uploadErr) {
+                    // The step itself succeeded and the local artifact is intact;
+                    // only the S3 backup failed, so don't fail the job for it.
+                    console.error(`[jobs/${service}] S3 upload failed for sample ${sampleId}:`, uploadErr.message);
+                }
+            } else {
+                job.state = 'failed';
+                job.error = `Container exited with status ${exitCode}`;
+            }
+        }).catch(err => {
+            const job = processingJobs.get(jobId);
+            if (!job) return;
+            job.state = 'failed';
+            job.error = err.message;
+            job.finishedAt = Date.now();
+        });
+
+        res.json({ success: true, jobId });
+    } catch (e) {
+        if (e.status === 401) return unauthorizedResponse(res, e.message);
+        console.error('[jobs/enqueue] error:', e.message);
+        res.status(e.status || 500).json({ success: false, error: e.message });
+    }
+});
+
+// GET /api/jobs/:jobId/status
+app.get('/api/jobs/:jobId/status', (req, res) => {
+    const job = processingJobs.get(req.params.jobId);
+    if (!job) return res.status(404).json({ success: false, error: 'Unknown jobId' });
+    res.json({ success: true, ...job });
+});
+
+// GET /api/processing-settings
+// Returns current processing settings (concurrency, CPU, memory limits per service)
+app.get('/api/processing-settings', (req, res) => {
+    res.json({ success: true, settings: processingSettings });
+});
+
+// PUT /api/processing-settings
+// Updates processing settings. Expects { parse: {...}, componentize: {...}, jsoncreate: {...}, screening: {...} }
+app.put('/api/processing-settings', (req, res) => {
+    const newSettings = req.body || {};
+    
+    // Validate and merge with defaults for processing pipeline services
+    const validated = {};
+    for (const service of PROCESSING_PIPELINE) {
+        const incoming = newSettings[service] || {};
+        const defaults = DEFAULT_PROCESSING_SETTINGS[service];
+        validated[service] = {
+            concurrency: Math.max(1, Math.min(10, parseInt(incoming.concurrency) || defaults.concurrency)),
+            cpus: Math.max(0.5, Math.min(4, parseFloat(incoming.cpus) || defaults.cpus)),
+            memoryMB: Math.max(512, Math.min(8192, parseInt(incoming.memoryMB) || defaults.memoryMB))
+        };
+    }
+    
+    // Validate screening settings separately (different fields)
+    const screeningIncoming = newSettings.screening || {};
+    const screeningDefaults = DEFAULT_PROCESSING_SETTINGS.screening;
+    validated.screening = {
+        maxConcurrentRequests: Math.max(1, Math.min(10, parseInt(screeningIncoming.maxConcurrentRequests) || screeningDefaults.maxConcurrentRequests)),
+        substancesBatchSize: Math.max(1, Math.min(50, parseInt(screeningIncoming.substancesBatchSize) || screeningDefaults.substancesBatchSize)),
+        requestDelayMs: Math.max(0, Math.min(5000, parseInt(screeningIncoming.requestDelayMs) || screeningDefaults.requestDelayMs))
+    };
+    
+    processingSettings = validated;
+    try {
+        saveProcessingSettings(validated);
+        console.log('[processing-settings] Saved:', validated);
+        res.json({ success: true, settings: validated });
+    } catch (err) {
+        console.error('[processing-settings] Failed to save:', err.message);
+        res.status(500).json({ success: false, error: 'Failed to persist settings' });
     }
 });
 
