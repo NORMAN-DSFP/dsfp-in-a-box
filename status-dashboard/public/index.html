@@ -80,35 +80,59 @@
             transform: translateY(-1px);
         }
         
-        .container-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 1rem;
-            padding: 2rem;
+        .container-table-wrap {
+            overflow-x: auto;
         }
-        
-        .container-card {
-            border: 1px solid var(--tblr-border-color, #ecf0f1);
-            border-radius: var(--tblr-border-radius, 0.5rem);
-            overflow: hidden;
-            transition: transform 0.2s;
-            background: var(--tblr-card-bg, #fff);
+
+        .container-table {
+            width: 100%;
+            min-width: 900px;
+            border-collapse: collapse;
+            font-size: 0.86rem;
         }
-        
-        .container-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+
+        .container-table th,
+        .container-table td {
+            padding: 0.75rem 0.9rem;
+            border-bottom: 1px solid var(--tblr-border-color, #e5e7eb);
+            text-align: left;
+            vertical-align: middle;
         }
-        
-        .container-header {
-            padding: 1rem;
-            border-bottom: 1px solid var(--tblr-border-color, #ecf0f1);
+
+        .container-table th {
+            background: var(--tblr-bg-surface-secondary, #f4f6f8);
+            color: var(--tblr-secondary-color, #5f6b76);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            white-space: nowrap;
         }
-        
+
+        .container-table tbody tr:hover {
+            background: var(--tblr-bg-surface-secondary, #f8fafc);
+        }
+
         .container-name {
-            font-weight: bold;
-            font-size: 1.1rem;
-            margin-bottom: 0.5rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .container-id {
+            color: var(--tblr-secondary-color, #5f6b76);
+        }
+
+        .container-image-name {
+            display: block;
+            max-width: 280px;
+            margin-top: 0.2rem;
+            color: var(--tblr-secondary-color, #7a8793);
+            font-size: 0.72rem;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .container-runtime-status {
+            width: 210px;
+            min-width: 210px;
         }
         
         .status-badge {
@@ -135,25 +159,10 @@
             color: #f39c12;
         }
         
-        .container-details {
-            padding: 1rem;
-            font-size: 0.9rem;
-        }
-        
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-        
-        .detail-label {
-            color: var(--tblr-secondary-color, #7f8c8d);
-            font-weight: 500;
-        }
-        
         .ports {
             font-family: monospace;
             font-size: 0.85rem;
+            white-space: nowrap;
         }
         
         .service-type {
@@ -166,10 +175,9 @@
         }
         
         .container-actions {
-            padding: 1rem;
-            border-top: 1px solid var(--tblr-border-color, #ecf0f1);
             display: flex;
             gap: 0.5rem;
+            min-width: 220px;
         }
         
         .action-btn {
@@ -273,36 +281,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
-        .health-status {
-            padding: 1rem 2rem;
-        }
-        
-        .health-overall {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 1rem;
-        }
-        
-        .health-healthy {
-            color: #27ae60;
-        }
-        
-        .health-unhealthy {
-            color: #e74c3c;
-        }
-        
-        .recommendations {
-            margin-top: 1rem;
-        }
-        
-        .recommendation {
-            background: #fff3cd;
-            color: #856404;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            margin-bottom: 0.5rem;
-        }
-        
         .docs-link {
             display: inline-block;
             background: #3498db;
@@ -317,6 +295,42 @@
         .docs-link:hover {
             background: #2980b9;
             color: white;
+        }
+
+        .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .collapse-toggle {
+            background: transparent;
+            border: none;
+            color: inherit;
+            display: flex;
+            align-items: center;
+            padding: 0.25rem;
+            cursor: pointer;
+        }
+
+        .collapse-toggle i {
+            transition: transform 0.2s ease;
+        }
+
+        .collapsible-body {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.25s ease;
+        }
+
+        .collapsible-body.expanded {
+            grid-template-rows: 1fr;
+        }
+
+        /* Padding must live on the inner content, not the row track itself,
+           otherwise the padding box stays visible even at a 0fr row height. */
+        .collapsible-inner {
+            overflow: hidden;
+            min-height: 0;
         }
     </style>
     <script>
@@ -336,9 +350,14 @@
         
         <!-- Project Information Section -->
         <div class="card">
-            <div class="section-header">
+            <div class="section-header collapsible-header" onclick="toggleCollapse('aboutSection')">
                 <h2><i data-lucide="info" class="icon-md"></i> About DSFP in a Box</h2>
+                <button class="collapse-toggle" id="aboutSectionToggle" aria-expanded="false">
+                    <i data-lucide="chevron-down" class="icon-md"></i>
+                </button>
             </div>
+            <div class="collapsible-body" id="aboutSection">
+            <div class="collapsible-inner">
             <div class="section-content">
                 <div class="info-box">
                     <h3><i data-lucide="box" class="icon-md"></i> Digital Sample Freezing Platform - in a box!</h3>
@@ -375,23 +394,14 @@
                     </ul>
                 </div>
             </div>
-        </div>
-        
-        <!-- Custom Health Check Section -->
-        <div class="card">
-            <div class="section-header">
-                <h2><i data-lucide="activity" class="icon-md"></i> System Health Check</h2>
-                <button class="btn btn-success" onclick="refreshHealthCheck()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
             </div>
-            <div class="health-status" id="healthStatus">
-                <div class="loading">Checking system health...</div>
             </div>
         </div>
 
         <!-- Containers List -->
         <div class="card containers-section">
             <div class="section-header">
-                <h2><i data-lucide="box" class="icon-md"></i> Container Status</h2>
+                <h2><i data-lucide="box" class="icon-md"></i> System Health</h2>
                 <button class="btn btn-success" onclick="refreshData()"><i data-lucide="refresh-cw" class="icon-sm"></i> Refresh</button>
             </div>
             <div id="containersContent">
@@ -537,20 +547,6 @@
             }
         }
 
-        async function fetchHealthCheck() {
-            try {
-                const response = await fetch('/api/custom/health-check');
-                const data = await response.json();
-                if (data.success) {
-                    updateHealthView(data.health);
-                } else {
-                    showHealthError('Health check failed: ' + data.error);
-                }
-            } catch (error) {
-                showHealthError('Network error: ' + error.message);
-            }
-        }
-
         // function updateStatsView() {
         //     document.getElementById('totalContainers').textContent = systemInfo.containers || '-';
         //     //document.getElementById('runningContainers').textContent = systemInfo.containersRunning || '-';
@@ -566,16 +562,24 @@
                 return;
             }
 
-            const grid = document.createElement('div');
-            grid.className = 'container-grid';
+            const wrapper = document.createElement('div');
+            wrapper.className = 'container-table-wrap';
+            const table = document.createElement('table');
+            table.className = 'container-table';
+            table.innerHTML = `
+                <thead><tr>
+                    <th>Container</th><th>State</th><th>Status</th><th>Ports</th><th>Options</th>
+                </tr></thead>
+                <tbody></tbody>`;
+            const tbody = table.querySelector('tbody');
 
             for (const container of containers) {
-                const card = await createContainerCard(container);
-                grid.appendChild(card);
+                tbody.appendChild(await createContainerRow(container));
             }
 
             content.innerHTML = '';
-            content.appendChild(grid);
+            wrapper.appendChild(table);
+            content.appendChild(wrapper);
             
             // Add event listeners for dynamically created buttons after all cards are created
             const reloadBtn = document.getElementById('reload-compounds-btn');
@@ -597,11 +601,10 @@
             }
         }
 
-        async function createContainerCard(container) {
-            const card = document.createElement('div');
-            card.className = 'container-card';
+        async function createContainerRow(container) {
+            const row = document.createElement('tr');
 
-            const statusClass = container.state === 'running' ? 'status-running' : 
+            const statusClass = ['running', 'ready', 'completed'].includes(container.state) ? 'status-running' :
                                container.state === 'paused' ? 'status-paused' : 'status-stopped';
 
             const ports = container.ports.length > 0 ? 
@@ -624,27 +627,9 @@
                         
                         const trackingCount = esStats.stats?.indexDetails?.tracking?.docCount || 0;
                         
-                        esStatsHtml = `
-                            <div class="detail-row">
-                                <span class="detail-label">Compounds loaded:</span>
-                                <span><b>${compoundsCount.toLocaleString()}</b>
-                                    <button class="reload-btn" id="reload-compounds-btn" title="Reload compounds from remote URL">
-                                        <i data-lucide="refresh-cw" class="icon-sm"></i> Reload
-                                    </button>
-                                    <button class="delete-btn" id="delete-compounds-btn" title="Delete all compounds data">
-                                        <i data-lucide="trash-2" class="icon-sm"></i> Delete
-                                    </button>
-                                </span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Samples loaded:</span>
-                                <span><b>${trackingCount.toLocaleString()}</b></span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Storage:</span>
-                                <span>${formatBytes(esStats.stats.totalSize)}</span>
-                            </div>
-                        `;
+                        esStatsHtml = `<br><small>${compoundsCount.toLocaleString()} compounds, ${trackingCount.toLocaleString()} samples, ${formatBytes(esStats.stats.totalSize)}</small>
+                            <br><button class="reload-btn" id="reload-compounds-btn" title="Reload compounds from remote URL"><i data-lucide="refresh-cw" class="icon-sm"></i> Reload</button>
+                            <button class="delete-btn" id="delete-compounds-btn" title="Delete all compounds data"><i data-lucide="trash-2" class="icon-sm"></i> Delete</button>`;
                         
                         // Create icons after HTML is set
                         setTimeout(() => lucide.createIcons(), 0);
@@ -654,36 +639,12 @@
                 }
             }
 
-            card.innerHTML = `
-                <div class="container-header">
-                    <div class="container-name">${container.name}</div>
-                    <span class="status-badge ${statusClass}">${container.state}</span>
-                    <span class="service-type">${container.serviceType}</span>
-                </div>
-                <div class="container-details">
-                    <div class="detail-row">
-                        <span class="detail-label">ID:</span>
-                        <span>${container.id}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">Ports:</span>
-                        <span class="ports">${ports}</span>
-                    </div>
-                    ${esStatsHtml}
-                    ${hasDocumentation ? `
-                    <div class="detail-row">
-                        <span class="detail-label">Documentation:</span>
-                        <a href="${docsUrl}" target="_blank" class="docs-link"><i data-lucide="book-open" class="icon-sm"></i> API Docs</a>
-                    </div>
-                    ` : ''}
-                    ${container.uptime ? `
-                    <div class="detail-row">
-                        <span class="detail-label">Uptime:</span>
-                        <span>${container.uptime}</span>
-                    </div>
-                    ` : ''}
-                </div>
-                <div class="container-actions">
+            row.innerHTML = `
+                <td><div class="container-name">${container.name}</div><small class="container-id">${container.id}</small><small class="container-image-name">${container.image}</small></td>
+                <td><span class="status-badge ${statusClass}">${container.state}</span></td>
+                <td class="container-runtime-status">${container.status}${container.uptime ? `<br><small>Uptime: ${container.uptime}</small>` : ''}${esStatsHtml}${hasDocumentation ? `<br><a href="${docsUrl}" target="_blank" class="docs-link"><i data-lucide="book-open" class="icon-sm"></i> API Docs</a>` : ''}</td>
+                <td class="ports">${ports}</td>
+                <td>${container.manageable === false ? '<span class="text-secondary">None</span>' : `<div class="container-actions">
                     <button class="action-btn btn-start ${container.isRunning ? 'btn-disabled' : ''}" 
                             onclick="containerAction('${container.id}', 'start')"
                             ${container.isRunning ? 'disabled' : ''}>
@@ -699,37 +660,13 @@
                             ${!container.isRunning ? 'disabled' : ''}>
                         <i data-lucide="refresh-cw" class="icon-sm"></i> Restart
                     </button>
-                </div>
+                </div>`}</td>
             `;
             
             // Create icons after HTML is set
             setTimeout(() => lucide.createIcons(), 0);
 
-            return card;
-        }
-
-        function updateHealthView(health) {
-            const content = document.getElementById('healthStatus');
-            const overallClass = health.overall === 'healthy' ? 'health-healthy' : 'health-unhealthy';
-            
-            let html = `
-                <div class="health-overall ${overallClass}">
-                    <i data-lucide="${health.overall === 'healthy' ? 'check-circle' : 'alert-circle'}" class="icon-md"></i>
-                    Project Status: ${health.overall.toUpperCase()}
-                </div>
-            `;
-
-
-            if (health.recommendations && health.recommendations.length > 0) {
-                html += '<div class="recommendations"><strong>Recommendations:</strong>';
-                health.recommendations.forEach(rec => {
-                    html += `<div class="recommendation"><i data-lucide="lightbulb" class="icon-sm"></i> ${rec}</div>`;
-                });
-                html += '</div>';
-            }
-
-            content.innerHTML = html;
-            lucide.createIcons();
+            return row;
         }
 
         async function containerAction(id, action) {
@@ -757,11 +694,6 @@
             content.innerHTML = `<div class="error">${message}</div>`;
         }
 
-        function showHealthError(message) {
-            const content = document.getElementById('healthStatus');
-            content.innerHTML = `<div class="error">${message}</div>`;
-        }
-
         function updateLastUpdated() {
             const now = new Date().toLocaleString();
             document.getElementById('lastUpdated').textContent = `Last updated: ${now}`;
@@ -772,17 +704,29 @@
             fetchSystemInfo();
         }
 
-        function refreshHealthCheck() {
-            fetchHealthCheck();
+        function toggleCollapse(id) {
+            const body = document.getElementById(id);
+            const toggle = document.getElementById(id + 'Toggle');
+            const expanded = body.classList.toggle('expanded');
+            toggle.setAttribute('aria-expanded', String(expanded));
+            // lucide.createIcons() replaces <i> with an inline <svg>, so match either.
+            const icon = toggle.querySelector('svg, i');
+            if (icon) icon.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
         }
 
         // Initial load
         refreshData();
-        fetchHealthCheck();
 
-        // Auto-refresh every 30 seconds
+        // Processing jobs are ephemeral. Serialize polling so a slow render
+        // cannot overlap the next request and replace controls mid-click.
+        async function pollContainers() {
+            await fetchContainers();
+            setTimeout(pollContainers, 10000);
+        }
+        setTimeout(pollContainers, 10000);
+
+        // Refresh the more expensive system info less frequently.
         setInterval(refreshData, 30000);
-        setInterval(refreshHealthCheck, 60000);
 
         // Function to fetch Elasticsearch stats
         async function fetchElasticsearchStats() {

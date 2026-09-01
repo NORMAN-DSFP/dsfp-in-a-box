@@ -832,7 +832,7 @@
                 const compoundsResponse = await fetch('/api/compounds/all');
                 
                 if (!compoundsResponse.ok) {
-                    throw new Error('Failed to fetch compounds list');
+                    throw new Error('Failed to fetch compounds list. Please reload them to the elasticsearch container in "Dashboard".');
                 }
 
                 const compoundsData = await compoundsResponse.json();

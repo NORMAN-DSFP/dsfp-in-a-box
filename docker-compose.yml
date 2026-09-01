@@ -106,21 +106,27 @@ services:
 
   models-parse:
     image: dsfp-in-a-box-models-parse:latest
+    container_name: dsfp-parse
     build:
       context: ./models
       dockerfile: parse/Dockerfile
-    profiles: ["build-only"]  # Image-only service; jobs run as ephemeral containers
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
 
   models-componentize:
     image: dsfp-in-a-box-models-componentize:latest
+    container_name: dsfp-componentize
     build:
       context: ./models/componentize
-    profiles: ["build-only"]  # Image-only service; jobs run as ephemeral containers
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
 
   models-jsoncreate:
     image: dsfp-in-a-box-models-jsoncreate:latest
+    container_name: dsfp-jsoncreate
     build: ./models/jsoncreate
-    profiles: ["build-only"]  # Image-only service; jobs run as ephemeral containers
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
 
 
   data-loader:
@@ -131,8 +137,7 @@ services:
     depends_on:
       - elasticsearch
       - init-elasticsearch
-    profiles:
-      - data-loading  # Only runs when explicitly started
+    restart: unless-stopped
     volumes:
       - ./data:/app/data
       - ./temp-uploads:/app/uploads

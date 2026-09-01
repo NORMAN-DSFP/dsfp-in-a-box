@@ -13,41 +13,9 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1.5rem;
-            margin-bot                    <div class="empty-state">
-                        <h3>Error Loading Detection Results</h3>
-                        <p>${error.message}</p>
-                        <button class="btn btn-success" onclick="loadDetections()"><i data-lucide="refresh-cw" class="icon-sm"></i> Try Again</button>
-                    </div>
-                `;
-           // Toggle matches display
-        function toggleMatches(index) {
-            const matchesRow = document.getElementById(`matches-${index}`);
-            const expandBtn = document.querySelector(`.expand-btn[data-row="${index}"]`);
-            
-            if (matchesRow.style.display === 'none') {
-                matchesRow.style.display = 'table-row';
-                const icon = expandBtn.querySelector('i[data-lucide]');
-                if (icon) {
-                    icon.setAttribute('data-lucide', 'chevron-down');
-                    lucide.createIcons();
-                }
-                expandBtn.classList.add('expanded');
-            } else {
-                matchesRow.style.display = 'none';
-                const icon = expandBtn.querySelector('i[data-lucide]');
-                if (icon) {
-                    icon.setAttribute('data-lucide', 'chevron-right');
-                    lucide.createIcons();
-                }
-                expandBtn.classList.remove('expanded');
-            }
-        }cument.getElementById('tableViewContainer').innerHTML = errorHTML;
-                document.getElementById('heatmapViewContainer').innerHTML = errorHTML;
-                lucide.createIcons();
-            }
+            margin-bottom: 1.5rem;
         }
-        }
-        
+
         .stat-card {
             background: white;
             padding: 1.5rem;
@@ -65,7 +33,6 @@
             border-radius: var(--tblr-border-radius, 0.5rem);
             overflow: hidden;
         }
-        }
         
         .stat-label {
             font-size: 0.9rem;
@@ -73,14 +40,6 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-            display: inline-flex;
-            border: 2px solid #3498db;
-            border-radius: 6px;
-            overflow: hidden;
-            margin-left: 0.5rem;
-            margin-right: 0.5rem;
-        }
-
         .view-toggle-btn {
             background:#3498db;
             color: #fff;
@@ -145,8 +104,8 @@
         }
 
         .view-toggle-btn {
-            background: transparent;
-            color: var(--tblr-body-color, #3498db);
+            background: #bed8e7;
+            color: #6f7d8a;
             border: none;
             padding: 0.55rem 1rem;
             cursor: pointer;
@@ -467,7 +426,7 @@
                     <span class="filter-label">Filter by Sample:</span>
                     <select id="sampleFilter" class="filter-select" onchange="filterBySample()">
                         <option value="">All Samples</option>
-                    </select>
+                    </select><br/>
                     <span class="filter-label">Filter by Result:</span>
                     <select id="detectionFilter" class="filter-select" onchange="filterByDetection()">
                         <option value="all">All</option>

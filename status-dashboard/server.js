@@ -367,13 +367,16 @@ except Exception as e:
 // Get container status
 app.get('/api/containers', async (req, res) => {
     try {
-        const containers = await docker.listContainers({ all: true });
+        const [containers, images] = await Promise.all([
+            docker.listContainers({ all: true }),
+            docker.listImages()
+        ]);
         
-        // Filter to only show DSFP-related containers (excluding ephemeral job containers)
+        // Include active ephemeral processing jobs. They are the real runtime
+        // containers for parse/componentize/jsoncreate and disappear on exit.
         const dsfpContainers = containers.filter(container => {
             const name = container.Names[0].replace('/', '');
-            // Exclude ephemeral job containers (dsfp-job-*)
-            if (name.startsWith('dsfp-job-')) return false;
+            if (PROCESSING_PIPELINE.some(service => name === `dsfp-${service}`)) return false;
             return (name.startsWith('dsfp-') || 
                    name.includes('dsfp-in-a-box') || 
                    name === 'elasticsearch') &&
@@ -392,6 +395,7 @@ app.get('/api/containers', async (req, res) => {
             else if (name === 'dsfp-spectral-similarity') serviceType = 'analysis';
             else if (name === 'dsfp-data-loader') serviceType = 'data-loading';
             else if (name.includes('init-elasticsearch')) serviceType = 'setup';
+            else if (name.startsWith('dsfp-job-')) serviceType = 'processing-job';
             
             return {
                 id: container.Id.substring(0, 12),
@@ -407,13 +411,58 @@ app.get('/api/containers', async (req, res) => {
                     type: port.Type
                 })),
                 created: new Date(container.Created * 1000).toISOString(),
-                uptime: isRunning ? getUptime(container.Status) : null
+                uptime: isRunning ? getUptime(container.Status) : null,
+                manageable: !name.startsWith('dsfp-job-')
             };
         });
+
+        const processingServices = PROCESSING_PIPELINE.map(service => {
+            const imageName = PROCESSING_IMAGES[service];
+            const image = images.find(item => (item.RepoTags || []).includes(imageName));
+            const worker = containers.find(container =>
+                container.Names.some(name => name === `/dsfp-${service}`)
+            );
+            const activeJobs = containerInfo.filter(container =>
+                container.name.startsWith(`dsfp-job-${service}-`) && container.isRunning
+            ).length;
+            const isRunning = worker && worker.State === 'running';
+            return {
+                id: worker ? worker.Id.substring(0, 12) : 'not-created',
+                name: service,
+                image: imageName,
+                state: worker ? worker.State : (image ? 'not-created' : 'missing'),
+                status: activeJobs ? `${worker ? worker.Status + '; ' : ''}${activeJobs} active job${activeJobs === 1 ? '' : 's'}` :
+                    (worker ? worker.Status : (image ? 'Run docker compose up to create worker' : 'Image not built')),
+                isRunning: !!isRunning,
+                serviceType: 'processing-worker',
+                ports: [],
+                created: worker ? new Date(worker.Created * 1000).toISOString() : null,
+                uptime: isRunning ? getUptime(worker.Status) : null,
+                manageable: !!worker
+            };
+        });
+
+        const recentJobs = Array.from(processingJobs.entries())
+            .filter(([, job]) => job.state !== 'processing')
+            .sort(([, a], [, b]) => (b.finishedAt || 0) - (a.finishedAt || 0))
+            .slice(0, 12)
+            .map(([jobId, job]) => ({
+                id: job.containerId ? job.containerId.substring(0, 12) : jobId,
+                name: `${job.service} sample ${job.sampleId}`,
+                image: PROCESSING_IMAGES[job.service],
+                state: job.state,
+                status: job.error || (job.state === 'completed' ? 'Completed successfully' : job.state),
+                isRunning: false,
+                serviceType: 'processing-job',
+                ports: [],
+                created: new Date(job.startedAt).toISOString(),
+                uptime: null,
+                manageable: false
+            }));
         
         res.json({
             success: true,
-            containers: containerInfo,
+            containers: [...processingServices, ...containerInfo, ...recentJobs],
             timestamp: new Date().toISOString()
         });
         
@@ -3442,42 +3491,103 @@ function parseWebformElementsYaml(yaml) {
     return { matrixOptions, envOptions, envMatrixKey, fields };
 }
 
-// Convert a JSON Schema (from webform_jsonschema) into the same structure.
+// Convert a JSON Schema (from webform_jsonschema) into the same {matrixOptions,envOptions,fields} structure.
+// webform_jsonschema wraps fields in wizard-page objects and encodes conditions via dependencies+oneOf.
 function jsonSchemaToInternalSchema(doc) {
-    const props = (doc && (doc.properties || (doc.schema && doc.schema.properties))) || {};
-    const requiredList = (doc && doc.required) || [];
+    const root = (doc && doc.schema) || doc || {};
     const out = { matrixOptions: [], envOptions: [], envMatrixKey: null, fields: [] };
 
-    const toPairs = arr => (arr || []).map(v => ({ value: v, label: v }));
+    // Labels for the matrix abbreviations used by DSFP/NORMAN flexbox containers.
+    const MATRIX_LABELS = {
+        gw: 'Groundwater', ww: 'Wastewater', sw: 'Surface water', sl: 'Sludge',
+        soil: 'Soil', sed: 'Sediment', biota: 'Biota', ia: 'Indoor air',
+        spm: 'Suspended particulate matter', aa: 'Ambient air',
+        wa: 'Work atmosphere', ea: 'Exhaled air', food: 'Food',
+        bio: 'Human biomonitoring'
+    };
 
-    Object.keys(props).forEach(name => {
-        const p = props[name] || {};
-        const label = p.title || p.label || name;
-        const enumVals = p.enum || (p.items && p.items.enum) || null;
+    // Convert anyOf / enum / items.anyOf to [{value, label}], or null.
+    function toOptions(p) {
+        if (!p) return null;
+        if (p.anyOf && Array.isArray(p.anyOf)) {
+            return p.anyOf
+                .filter(o => o && o.enum && o.enum.length)
+                .map(o => ({ value: String(o.enum[0]), label: o.title || String(o.enum[0]) }));
+        }
+        if (p.enum && Array.isArray(p.enum)) {
+            return p.enum.map(v => ({ value: String(v), label: String(v) }));
+        }
+        if (p.items) {
+            if (p.items.anyOf && Array.isArray(p.items.anyOf)) {
+                return p.items.anyOf
+                    .filter(o => o && o.enum && o.enum.length)
+                    .map(o => ({ value: String(o.enum[0]), label: o.title || String(o.enum[0]) }));
+            }
+            if (p.items.enum) {
+                return p.items.enum.map(v => ({ value: String(v), label: String(v) }));
+            }
+        }
+        return null;
+    }
 
-        if (name === 'matrix') { out.matrixOptions = toPairs(enumVals); return; }
-        if (name === 'env_monitoring') { out.envOptions = toPairs(enumVals); return; }
+    // Walk a schema object and push leaf fields into out.fields with the given group.
+    function walkFields(schema, group) {
+        if (!schema || typeof schema !== 'object') return;
+        const props = schema.properties || {};
+        const requiredHere = Array.isArray(schema.required) ? schema.required : [];
 
-        out.fields.push({
-            name,
-            label,
-            required: requiredList.includes(name),
-            type: p.type === 'string' && p.format === 'date' ? 'date'
-                : p.type === 'number' || p.type === 'integer' ? 'number'
-                : 'textfield',
-            options: enumVals ? toPairs(enumVals) : null,
-            group: 'common',
-            description: p.description,
-            min: p.minimum,
-            max: p.maximum,
-            minlength: p.minLength,
-            maxlength: p.maxLength,
-            pattern: p.pattern,
-            patternError: undefined,
-            step: undefined,
-            multiple: p.type === 'array'
+        Object.entries(props).forEach(([name, p]) => {
+            if (!p || typeof p !== 'object') return;
+            // Container: has nested properties but is not an array type — recurse.
+            if (p.properties && p.type !== 'array') { walkFields(p, group); return; }
+
+            out.fields.push({
+                name,
+                label:    p.title || p.label || name,
+                required: requiredHere.includes(name),
+                type: p.type === 'string' && p.format === 'date' ? 'date'
+                    : (p.type === 'number' || p.type === 'integer') ? 'number'
+                    : 'textfield',
+                options:  toOptions(p),
+                group,
+                description: p.description,
+                min: p.minimum,  max: p.maximum,
+                minlength: p.minLength, maxlength: p.maxLength,
+                pattern: p.pattern, patternError: undefined, step: undefined,
+                multiple: p.type === 'array'
+            });
         });
+
+        // Handle dependencies+oneOf if present (legacy/mixed webform structure).
+        Object.entries(schema.dependencies || {}).forEach(([trigger, dep]) => {
+            ((dep && dep.oneOf) || []).forEach(item => {
+                if (!item || !item.properties) return;
+                walkFields(item, group);
+            });
+        });
+    }
+
+    const pages = root.properties || {};
+    Object.entries(pages).forEach(([pageName, page]) => {
+        if (!page || typeof page !== 'object') return;
+
+        if (pageName === 'matrix_page') {
+            // matrix_header contains flexbox_X containers — one per matrix type.
+            const mh = page.properties && page.properties.matrix_header;
+            if (mh && mh.properties) {
+                Object.entries(mh.properties).forEach(([fbKey, fb]) => {
+                    const matrixKey = fbKey.replace(/^flexbox_/, '');
+                    const label = MATRIX_LABELS[matrixKey] || matrixKey;
+                    out.matrixOptions.push({ value: matrixKey, label });
+                    if (fb.properties) walkFields(fb, 'matrix:' + matrixKey);
+                });
+            }
+        } else {
+            // All other pages (metadata, files, …) are common to every matrix.
+            if (page.properties) walkFields(page, 'common');
+        }
     });
+
     return out;
 }
 
@@ -3541,18 +3651,26 @@ app.post('/api/webform/schema', async (req, res) => {
         errors.push('JSON:API: not logged in');
     }
 
-    // --- Strategy 2: webform_jsonschema, NO Authorization header -----------
-    // The webform_jsonschema route only allows Drupal session-cookie auth. Sending
-    // ANY Authorization header (Basic or Bearer) causes AccessDeniedHttpException.
-    // Sending no header lets anonymous access work if the schema is public.
+    // --- Strategy 2: webform_jsonschema ---
+    // Cookie auth is supported; Bearer tokens are NOT (Drupal throws AccessDeniedException).
+    // Send the logged-in user's session cookie when available so Drupal's per-role
+    // permission applies, then fall back to anonymous.
     try {
         const url = `${DSFP_BASE_URL}/webform_jsonschema/${webformId}`;
+        const reqHeaders = {
+            'Accept': 'application/json',
+            'User-Agent': 'DSFP-Dashboard-Importer/1.0'
+        };
+        let authMethod = 'anon';
+        if (dsfpSession) {
+            try {
+                const { cookies } = await getValidDsfpSession();
+                reqHeaders['Cookie'] = cookies;
+                authMethod = 'session-cookie';
+            } catch (e) { /* session cookie unavailable — proceed anonymously */ }
+        }
         const r = await axios.get(url, {
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'DSFP-Dashboard-Importer/1.0'
-                // Intentionally NO Authorization header
-            },
+            headers: reqHeaders,
             validateStatus: () => true,
             maxContentLength: Infinity,
             maxBodyLength: Infinity
@@ -3560,12 +3678,12 @@ app.post('/api/webform/schema', async (req, res) => {
 
         if (r.status === 200) {
             const schema = jsonSchemaToInternalSchema(r.data);
-            console.log(`Webform schema via webform_jsonschema (anon): ${schema.fields.length} fields`);
+            console.log(`Webform schema via webform_jsonschema (${authMethod}): ${schema.fields.length} fields, matrixOptions=${schema.matrixOptions.length}, envOptions=${schema.envOptions.length}`);
             return res.json({ success: true, source: 'jsonschema', url, schema });
         }
-        errors.push(`webform_jsonschema (anon): HTTP ${r.status}`);
+        errors.push(`webform_jsonschema (${authMethod}): HTTP ${r.status}`);
     } catch (e) {
-        errors.push(`webform_jsonschema (anon): ${e.message}`);
+        errors.push(`webform_jsonschema: ${e.message}`);
     }
 
     // Both strategies failed — tell the client so it can use its built-in schema.
